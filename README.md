@@ -24,10 +24,10 @@ tar xvfJ node-v18.20.8-linux-armv6l.tar.xz
 ``` 
 sudo cp -R node-v18.20.8-linux-armv6l/* /usr/local/
 ```
-
+reboot Raspfberry pi
 ``` 
 sudo reboot
-```
+``` 
 ``` 
 node -v && npm -v
 ``` 
@@ -37,11 +37,14 @@ Updates sources and upgrade Raspberry Pi and at the end removes no needed packag
 ``` 
 sudo apt update && apt upgrade y -f && sudo apt autoremove -y 
 ``` 
-
+reboot Raspberry pi
+``` 
+sudo reboot
+```
 ``` 
 sudo apt install -y libcamera-apps libcamera0 v4l-utils -y -f
 ``` 
-reboot Raspfberry pi
+reboot Raspberry pi
 ``` 
 sudo reboot
 ```
