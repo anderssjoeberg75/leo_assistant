@@ -14,11 +14,13 @@ sudo usermod -aG gpio $USER
 
 Prepare folders and get the code
 
-Create folder for the webapp 
+Create folder for the webapp and the script folder
 ```
 sudo mkdir -p /opt/jarvis
 ```
-
+```
+sudo mkdir -p /opt/script
+```
 Set correct owner of the folder
 ```
 sudo chown $USER:$USER /opt/jarvis
@@ -26,7 +28,7 @@ sudo chown $USER:$USER /opt/jarvis
 ```
 Clone the repositopry
 ``` 
-git clone https://github.com/anderssjoeberg75/jarvisassistant.git /opt/jarvis
+git clone https://github.com/anderssjoeberg75/jarvisassistant.git /opt/
 ``` 
 
 
