@@ -1,47 +1,33 @@
 <!DOCTYPE html>
 <html>
 <head>
-<meta charset="UTF-8">
 <title>Jarvis Robot</title>
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
 <style>
-body { background:#f2f2f2; font-family:Arial; text-align:center; }
-#video { width:100%; max-width:640px; }
-.panel { margin:10px; padding:10px; background:#fff; border-radius:10px; }
-button { padding:10px 15px; margin:5px; border-radius:10px; }
+body{background:#f2f2f2;font-family:sans-serif;text-align:center}
+.controls{display:flex;justify-content:center;gap:40px}
+.arrows button{width:80px;height:80px;font-size:30px}
+.speed{writing-mode:bt-lr;transform:rotate(270deg);height:240px}
 </style>
 </head>
 <body>
-
-<img id="video" src="http://YOUR_PI_IP:8888">
-
-<div class="panel">
-  <div>CPU: <span id="cpu">0</span>% | RAM: <span id="ram">0</span>%</div>
+<h2>Jarvis Robot</h2>
+<img src="http://localhost:8888" width="640">
+<div class="controls">
+<div class="arrows">
+<button>⬆</button><br>
+<button>⬅</button><button>⬇</button><button>➡</button><br>
+<button onclick="reboot()">Restart Jarvis</button>
 </div>
-
-<div class="panel">
-  <button onclick="reboot()">Reboot</button>
-  <button onclick="shutdown()">Shutdown</button>
-  <button onclick="restartCamera()">Restart Camera</button>
+<input class="speed" type="range" min="0" max="100">
 </div>
-
+<div id="sys"></div>
 <script src="/socket.io/socket.io.js"></script>
 <script>
-const socket = io();
-
-function refreshStats(){
-  socket.emit('getStats');
-}
-socket.on('stats', data => {
-  document.getElementById('cpu').textContent = data.cpu;
-  document.getElementById('ram').textContent = data.ram;
+const socket=io();
+socket.on('system',d=>{
+document.getElementById('sys').innerText=`CPU:${d.cpu} RAM:${d.ram}%`;
 });
-setInterval(refreshStats, 2000);
-
-function reboot(){ fetch('/reboot',{method:'POST'}); }
-function shutdown(){ fetch('/shutdown',{method:'POST'}); }
-function restartCamera(){ fetch('/camera-restart',{method:'POST'}); }
+function reboot(){socket.emit('reboot');}
 </script>
-
 </body>
 </html>

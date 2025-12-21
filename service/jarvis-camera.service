@@ -1,16 +1,12 @@
 [Unit]
-Description=Jarvis Camera Stream
+Description=Jarvis Camera HTTP Stream
 After=network-online.target
 Wants=network-online.target
 
 [Service]
-Type=simple
-User=root
-ExecStart=/usr/bin/rpicam-vid --inline --listen --signal=off -t 0 --width 640 --height 480 --framerate 15 --codec mjpeg -o tcp://0.0.0.0:8888
+ExecStart=/bin/bash -c '/usr/bin/rpicam-vid --inline -t 0 --width 640 --height 480 --framerate 15 --codec mjpeg -o /dev/stdout | /usr/bin/ustreamer --device=/dev/stdin --format MJPEG --host 0.0.0.0 --port 8888 --no-log'
 Restart=always
-RestartSec=2
-StandardOutput=journal
-StandardError=journal
+User=root
 
 [Install]
 WantedBy=multi-user.target

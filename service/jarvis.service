@@ -1,17 +1,12 @@
 [Unit]
 Description=Jarvis Robot Control Server
-After=network-online.target pigpiod.service
-Wants=network-online.target
+After=network.target
 
 [Service]
-Type=simple
-User=root
-WorkingDirectory=/opt/jarvis
 ExecStart=/usr/local/bin/node /opt/jarvis/server.js
 Restart=always
-RestartSec=2
-StandardOutput=journal
-StandardError=journal
+User=root
+WorkingDirectory=/opt/jarvis
 
 [Install]
 WantedBy=multi-user.target
