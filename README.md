@@ -39,7 +39,7 @@ sudo apt update && apt upgrade y -f && sudo apt autoremove -y
 ``` 
 
 ``` 
-sudo apt install -y libcamera-apps -y -f
+sudo apt install -y libcamera-apps libcamera0 v4l-utils -y -f
 ``` 
 reboot Raspfberry pi
 ``` 
