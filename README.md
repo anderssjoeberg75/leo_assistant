@@ -1,5 +1,17 @@
 # jarvisassistant
 
+Prepare folders
+
+Create folder for the webapp 
+```
+sudo mkdir -p /opt/jarvis
+```
+
+Set correct owner of the folder
+```
+sudo chown -R username:username /opt/jarvis
+``` 
+
 Install Node.JS
 
 ``` 
@@ -14,7 +26,7 @@ sudo cp -R node-v18.20.8-linux-armv6l/* /usr/local/
 ```
 
 ``` 
-reboot
+sudo reboot
 ```
 ``` 
 node -v && npm -v
