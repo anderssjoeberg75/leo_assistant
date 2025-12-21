@@ -1,0 +1,11 @@
+{
+  "name": "jarvis-robot",
+  "version": "1.0.0",
+  "description": "Raspberry Pi robot control with tank steering and camera",
+  "main": "server.js",
+  "dependencies": {
+    "express": "^4.19.2",
+    "socket.io": "^4.7.5",
+    "pigpio": "^3.3.1"
+  }
+}

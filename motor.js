@@ -1,0 +1,63 @@
+const { Gpio } = require('pigpio');
+
+const IN1 = new Gpio(23, { mode: Gpio.OUTPUT });
+const IN2 = new Gpio(24, { mode: Gpio.OUTPUT });
+const ENA = new Gpio(18, { mode: Gpio.OUTPUT });
+
+const IN3 = new Gpio(27, { mode: Gpio.OUTPUT });
+const IN4 = new Gpio(22, { mode: Gpio.OUTPUT });
+const ENB = new Gpio(19, { mode: Gpio.OUTPUT });
+
+let currentLeft = 0;
+let currentRight = 0;
+let targetLeft = 0;
+let targetRight = 0;
+
+const RAMP_STEP = 5;
+const RAMP_INTERVAL = 20;
+const MAX_PWM = 180;
+
+setInterval(() => {
+  currentLeft += Math.sign(targetLeft - currentLeft) *
+    Math.min(Math.abs(targetLeft - currentLeft), RAMP_STEP);
+
+  currentRight += Math.sign(targetRight - currentRight) *
+    Math.min(Math.abs(targetRight - currentRight), RAMP_STEP);
+
+  ENA.pwmWrite(currentLeft);
+  ENB.pwmWrite(currentRight);
+}, RAMP_INTERVAL);
+
+function stop() {
+  targetLeft = 0;
+  targetRight = 0;
+}
+
+function setTank(speed, steering) {
+  let left = speed + steering;
+  let right = speed - steering;
+
+  left = Math.max(-1, Math.min(1, left));
+  right = Math.max(-1, Math.min(1, right));
+
+  if (left >= 0) {
+    IN1.digitalWrite(1);
+    IN2.digitalWrite(0);
+  } else {
+    IN1.digitalWrite(0);
+    IN2.digitalWrite(1);
+  }
+
+  if (right >= 0) {
+    IN3.digitalWrite(1);
+    IN4.digitalWrite(0);
+  } else {
+    IN3.digitalWrite(0);
+    IN4.digitalWrite(1);
+  }
+
+  targetLeft = Math.abs(left) * MAX_PWM;
+  targetRight = Math.abs(right) * MAX_PWM;
+}
+
+module.exports = { setTank, stop };
