@@ -31,10 +31,14 @@ sudo reboot
 ``` 
 node -v && npm -v
 ``` 
-Install 
+Install and update all that is needed
+
+Updates sources and upgrade Raspberry Pi and at the end removes no needed packages
+``` 
+sudo apt update && apt upgrade y -f && sudo apt autoremove -y 
+``` 
 
 ``` 
-sudo apt update
 sudo apt install -y libcamera-apps -y -f
 ``` 
 reboot Raspfberry pi
