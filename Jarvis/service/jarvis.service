@@ -1,0 +1,12 @@
+[Unit]
+Description=Jarvis Robot Control Server
+After=network.target
+
+[Service]
+ExecStart=/usr/local/bin/node /opt/jarvis/server.js
+Restart=always
+User=root
+WorkingDirectory=/opt/jarvis
+
+[Install]
+WantedBy=multi-user.target
