@@ -1,105 +1,46 @@
 <!DOCTYPE html>
-<html lang="en">
+<html>
 <head>
-  <meta charset="UTF-8">
-  <title>Jarvis Robot Control</title>
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-
-  <style>
-    body {
-      margin: 0;
-      background: #111;
-      color: #fff;
-      font-family: Arial, sans-serif;
-      text-align: center;
-      touch-action: none;
-    }
-
-    h2 {
-      margin: 10px 0;
-    }
-
-    #video {
-      width: 100%;
-      max-width: 640px;
-      border-bottom: 2px solid #333;
-    }
-
-    .control {
-      padding: 10px;
-    }
-
-    label {
-      display: block;
-      margin-top: 10px;
-    }
-
-    input[type=range] {
-      width: 90%;
-    }
-
-    .value {
-      font-size: 0.9em;
-      color: #aaa;
-    }
-  </style>
+<meta charset="UTF-8">
+<title>Jarvis Robot</title>
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<style>
+body { background:#f2f2f2; font-family:Arial; text-align:center; }
+#video { width:100%; max-width:640px; }
+.panel { margin:10px; padding:10px; background:#fff; border-radius:10px; }
+button { padding:10px 15px; margin:5px; border-radius:10px; }
+</style>
 </head>
 <body>
 
-<h2>Jarvis Robot</h2>
+<img id="video" src="http://YOUR_PI_IP:8888">
 
-<img
-  id="video"
-  src="http://YOUR_PI_IP:8888"
-  alt="Camera stream"
-  onerror="this.style.display='none';"
-/>
+<div class="panel">
+  <div>CPU: <span id="cpu">0</span>% | RAM: <span id="ram">0</span>%</div>
+</div>
 
-<div class="control">
-  <label>
-    Speed
-    <div class="value" id="speedVal">0</div>
-  </label>
-  <input id="speed" type="range" min="-100" max="100" value="0">
-
-  <label>
-    Steering
-    <div class="value" id="steerVal">0</div>
-  </label>
-  <input id="steering" type="range" min="-100" max="100" value="0">
+<div class="panel">
+  <button onclick="reboot()">Reboot</button>
+  <button onclick="shutdown()">Shutdown</button>
+  <button onclick="restartCamera()">Restart Camera</button>
 </div>
 
 <script src="/socket.io/socket.io.js"></script>
 <script>
-  const socket = io();
+const socket = io();
 
-  const speed = document.getElementById('speed');
-  const steering = document.getElementById('steering');
-  const speedVal = document.getElementById('speedVal');
-  const steerVal = document.getElementById('steerVal');
+function refreshStats(){
+  socket.emit('getStats');
+}
+socket.on('stats', data => {
+  document.getElementById('cpu').textContent = data.cpu;
+  document.getElementById('ram').textContent = data.ram;
+});
+setInterval(refreshStats, 2000);
 
-  function sendDrive() {
-    socket.emit('drive', {
-      speed: speed.value / 100,
-      steering: steering.value / 100
-    });
-  }
-
-  speed.addEventListener('input', () => {
-    speedVal.textContent = speed.value;
-    sendDrive();
-  });
-
-  steering.addEventListener('input', () => {
-    steerVal.textContent = steering.value;
-    sendDrive();
-  });
-
-  document.addEventListener('visibilitychange', () => {
-    if (document.hidden) {
-      socket.emit('drive', { speed: 0, steering: 0 });
-    }
-  });
+function reboot(){ fetch('/reboot',{method:'POST'}); }
+function shutdown(){ fetch('/shutdown',{method:'POST'}); }
+function restartCamera(){ fetch('/camera-restart',{method:'POST'}); }
 </script>
 
 </body>

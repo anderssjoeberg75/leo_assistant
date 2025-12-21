@@ -8,6 +8,11 @@ const IN3 = new Gpio(27, { mode: Gpio.OUTPUT });
 const IN4 = new Gpio(22, { mode: Gpio.OUTPUT });
 const ENB = new Gpio(19, { mode: Gpio.OUTPUT });
 
+ENA.pwmFrequency(1000);
+ENB.pwmFrequency(1000);
+ENA.pwmWrite(0);
+ENB.pwmWrite(0);
+
 let currentLeft = 0;
 let currentRight = 0;
 let targetLeft = 0;
@@ -15,7 +20,11 @@ let targetRight = 0;
 
 const RAMP_STEP = 5;
 const RAMP_INTERVAL = 20;
-const MAX_PWM = 180;
+const MAX_PWM = 200;
+
+function clampPWM(v) {
+  return Math.max(0, Math.min(255, Math.round(v || 0)));
+}
 
 setInterval(() => {
   currentLeft += Math.sign(targetLeft - currentLeft) *
@@ -24,8 +33,8 @@ setInterval(() => {
   currentRight += Math.sign(targetRight - currentRight) *
     Math.min(Math.abs(targetRight - currentRight), RAMP_STEP);
 
-  ENA.pwmWrite(currentLeft);
-  ENB.pwmWrite(currentRight);
+  ENA.pwmWrite(clampPWM(currentLeft));
+  ENB.pwmWrite(clampPWM(currentRight));
 }, RAMP_INTERVAL);
 
 function stop() {
@@ -34,27 +43,13 @@ function stop() {
 }
 
 function setTank(speed, steering) {
-  let left = speed + steering;
-  let right = speed - steering;
+  let left = Math.max(-1, Math.min(1, speed + steering));
+  let right = Math.max(-1, Math.min(1, speed - steering));
 
-  left = Math.max(-1, Math.min(1, left));
-  right = Math.max(-1, Math.min(1, right));
-
-  if (left >= 0) {
-    IN1.digitalWrite(1);
-    IN2.digitalWrite(0);
-  } else {
-    IN1.digitalWrite(0);
-    IN2.digitalWrite(1);
-  }
-
-  if (right >= 0) {
-    IN3.digitalWrite(1);
-    IN4.digitalWrite(0);
-  } else {
-    IN3.digitalWrite(0);
-    IN4.digitalWrite(1);
-  }
+  IN1.digitalWrite(left >= 0 ? 1 : 0);
+  IN2.digitalWrite(left >= 0 ? 0 : 1);
+  IN3.digitalWrite(right >= 0 ? 1 : 0);
+  IN4.digitalWrite(right >= 0 ? 0 : 1);
 
   targetLeft = Math.abs(left) * MAX_PWM;
   targetRight = Math.abs(right) * MAX_PWM;
