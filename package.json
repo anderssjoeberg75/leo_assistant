@@ -1,9 +1,12 @@
 {
-  "name": "jarvis",
-  "version": "1.0.0",
+  "name": "jarvis-robot",
+  "version": "1.2.1",
+  "description": "Raspberry Pi robot control with arrow buttons, tank steering and camera",
   "main": "server.js",
+  "type": "commonjs",
   "dependencies": {
-    "express": "^4.18.2",
-    "socket.io": "^4.7.2"
+    "express": "^4.19.2",
+    "socket.io": "^4.7.5",
+    "pigpio": "^3.3.1"
   }
 }

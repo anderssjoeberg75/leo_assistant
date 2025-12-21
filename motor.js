@@ -23,7 +23,8 @@ const RAMP_INTERVAL = 20;
 const MAX_PWM = 200;
 
 function clampPWM(v) {
-  return Math.max(0, Math.min(255, Math.round(v || 0)));
+  if (Number.isNaN(v)) return 0;
+  return Math.max(0, Math.min(255, Math.round(v)));
 }
 
 setInterval(() => {
@@ -43,13 +44,27 @@ function stop() {
 }
 
 function setTank(speed, steering) {
+  speed = Math.max(-1, Math.min(1, speed));
+  steering = Math.max(-1, Math.min(1, steering));
+
   let left = Math.max(-1, Math.min(1, speed + steering));
   let right = Math.max(-1, Math.min(1, speed - steering));
 
-  IN1.digitalWrite(left >= 0 ? 1 : 0);
-  IN2.digitalWrite(left >= 0 ? 0 : 1);
-  IN3.digitalWrite(right >= 0 ? 1 : 0);
-  IN4.digitalWrite(right >= 0 ? 0 : 1);
+  if (left >= 0) {
+    IN1.digitalWrite(1);
+    IN2.digitalWrite(0);
+  } else {
+    IN1.digitalWrite(0);
+    IN2.digitalWrite(1);
+  }
+
+  if (right >= 0) {
+    IN3.digitalWrite(1);
+    IN4.digitalWrite(0);
+  } else {
+    IN3.digitalWrite(0);
+    IN4.digitalWrite(1);
+  }
 
   targetLeft = Math.abs(left) * MAX_PWM;
   targetRight = Math.abs(right) * MAX_PWM;
