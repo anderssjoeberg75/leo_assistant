@@ -42,7 +42,7 @@ reboot Raspberry pi
 sudo reboot
 ```
 ``` 
-sudo apt install -y  rpicam-apps libcamera0 v4l-utils pigpio -y -f
+sudo apt install -y  rpicam-apps libcamera0 v4l-utils pigpio ustreamer-y -f
 ```
 sudo usermod -aG gpio $USER
 
