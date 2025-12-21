@@ -24,7 +24,7 @@ tar xvfJ node-v18.20.8-linux-armv6l.tar.xz
 ``` 
 sudo cp -R node-v18.20.8-linux-armv6l/* /usr/local/
 ```
-reboot Raspfberry pi
+reboot Raspberry pi
 ``` 
 sudo reboot
 ``` 
