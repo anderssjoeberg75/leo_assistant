@@ -37,3 +37,7 @@ Install
 sudo apt update
 sudo apt install -y libcamera-apps -y -f
 ``` 
+reboot Raspfberry pi
+``` 
+sudo reboot
+```
