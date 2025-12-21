@@ -30,7 +30,10 @@ Clone the repositopry
 ``` 
 git clone https://github.com/anderssjoeberg75/jarvisassistant.git /opt/
 ``` 
-
+reboot Raspberry pi
+``` 
+sudo reboot
+```
 
 Install Node.JS v 18.20.8
 
@@ -51,15 +54,3 @@ sudo reboot
 ``` 
 node -v && npm -v
 ``` 
-
-reboot Raspberry pi
-``` 
-sudo reboot
-```
-
-
-
-reboot Raspberry pi
-``` 
-sudo reboot
-```
