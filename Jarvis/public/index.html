@@ -1,88 +1,155 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-<meta charset="UTF-8">
-<title>Leo the assistant</title>
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
-<style>
-body {
-  margin: 0;
-  background: #111;
-  color: #fff;
-  font-family: Arial, sans-serif;
-  text-align: center;
-  touch-action: none;
-}
+  <meta charset="UTF-8">
+  <title>Leo the assistant</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <style>
+    body {
+      margin: 0;
+      background: #111;
+      color: #fff;
+      font-family: Arial, sans-serif;
+      text-align: center;
+      touch-action: none;
+    }
 
-#video {
-  width: 640px;
-  height: 480px;
-  border: 3px solid #444;
-  box-sizing: border-box;
-  object-fit: cover;
-}
+    #video {
+      width: 640px;
+      height: 480px;
+      border: 3px solid #444;
+      box-sizing: border-box;
+      object-fit: cover;
+    }
 
-.controls {
-  display: flex;
-  justify-content: center;
-  align-items: center;
-  gap: 20px;
-  margin-top: 15px;
-}
+    /* ================= ADDED: ASK LEO ================= */
 
-.arrows {
-  display: grid;
-  grid-template-columns: 80px 80px 80px;
-  grid-template-rows: 80px 80px 80px;
-  gap: 10px;
-}
+    .leo-chat {
+      width: 640px;
+      margin: 10px auto 5px auto;
+      text-align: left;
+    }
 
-button {
-  background: #333;
-  color: #fff;
-  border: none;
-  border-radius: 12px;
-  font-size: 20px;
-}
+    .leo-input-row {
+      display: flex;
+      gap: 6px;
+    }
 
-button:active { background: #666; }
+    .leo-input {
+      flex: 1;
+      padding: 8px;
+      font-size: 15px;
+      font-weight: bold;
+      border-radius: 6px;
+      border: none;
+      outline: none;
+    }
 
-#speed {
-  -webkit-appearance: slider-vertical;
-  width: 40px;
-  height: 200px;
-}
+    .leo-send {
+      padding: 8px 14px;
+      font-size: 14px;
+      font-weight: bold;
+      border-radius: 6px;
+      border: none;
+      cursor: pointer;
+      background: #a00000;
+      color: #fff;
+    }
 
-.system-buttons {
-  display: flex;
-  flex-direction: column;
-  gap: 15px;
-}
+    .leo-send:active {
+      background: #ff0000;
+    }
 
-.system-buttons button {
-  background: #a00000;
-  font-size: 14px;
-  padding: 12px;
-}
+    .leo-answer {
+      margin-top: 6px;
+      padding: 8px;
+      min-height: 22px;
+      font-size: 15px;
+      font-weight: bold;
+      border-radius: 6px;
+    }
 
-.system-buttons button:active {
-  background: #ff0000;
-}
+    /* Answer colors */
+    .info    { background: #1c1c1c; color: #6fd3ff; }
+    .ok      { background: #1b5e20; color: #c8e6c9; }
+    .warning { background: #f9a825; color: #000; }
+    .error   { background: #b71c1c; color: #ffcdd2; }
 
-.stats {
-  margin-top: 18px;
-  font-size: 15px;
-  font-weight: bold;
-}
+    /* ================= EXISTING STYLES ================= */
 
-.ok { color:#fff; }
-.warn { color:#ffd000; }
-.crit { color:#ff4444; }
-</style>
+    .controls {
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      gap: 20px;
+      margin-top: 15px;
+    }
+
+    .arrows {
+      display: grid;
+      grid-template-columns: 80px 80px 80px;
+      grid-template-rows: 80px 80px 80px;
+      gap: 10px;
+    }
+
+    button {
+      background: #333;
+      color: #fff;
+      border: none;
+      border-radius: 12px;
+      font-size: 20px;
+    }
+
+    button:active { background: #666; }
+
+    #speed {
+      -webkit-appearance: slider-vertical;
+      width: 40px;
+      height: 150px;
+    }
+
+    .system-buttons {
+      display: flex;
+      flex-direction: column;
+      gap: 15px;
+    }
+
+    .system-buttons button {
+      background: #a00000;
+      font-size: 14px;
+      padding: 12px;
+    }
+
+    .system-buttons button:active {
+      background: #ff0000;
+    }
+
+    .stats {
+      margin-top: 18px;
+      font-size: 15px;
+      font-weight: bold;
+    }
+
+    .ok { color:#fff; }
+    .warn { color:#ffd000; }
+    .crit { color:#ff4444; }
+  </style>
 </head>
 <body>
 
 <img id="video" src="http://YOUR_PI_IP:8888">
+
+<!-- ================= ADDED: ASK LEO UI ================= -->
+
+<div class="leo-chat">
+  <div class="leo-input-row">
+    <input id="leoInput" class="leo-input" type="text" placeholder="Ask Leo..." autocomplete="off">
+    <button id="leoSend" class="leo-send">Send</button>
+  </div>
+  <div id="leoAnswer" class="leo-answer info"></div>
+</div>
+
+<!-- ================= END ADDED ================= -->
 
 <div class="controls">
   <div class="arrows">
@@ -110,48 +177,89 @@ button:active { background: #666; }
 
 <script src="/socket.io/socket.io.js"></script>
 <script>
-const socket = io();
-let speed = 0.5;
-let steering = 0;
+  const socket = io();
+  let speed = 0.5;
+  let steering = 0;
 
-document.getElementById('speed').oninput = e => speed = e.target.value / 100;
+  document.getElementById('speed').oninput = e => speed = e.target.value / 100;
 
-function send(){ socket.emit('drive',{speed,steering}); }
-function halt(){ socket.emit('drive',{speed:0,steering:0}); }
+  function send(){ socket.emit('drive',{speed,steering}); }
+  function halt(){ socket.emit('drive',{speed:0,steering:0}); }
 
-document.getElementById('fwd').ontouchstart=()=>{steering=0;send();};
-document.getElementById('back').ontouchstart=()=>{steering=0;speed=-Math.abs(speed);send();};
-document.getElementById('left').ontouchstart=()=>{steering=-0.6;send();};
-document.getElementById('right').ontouchstart=()=>{steering=0.6;send();};
-document.getElementById('stop').ontouchstart=halt;
+  document.getElementById('fwd').ontouchstart=()=>{steering=0;send();};
+  document.getElementById('back').ontouchstart=()=>{steering=0;speed=-Math.abs(speed);send();};
+  document.getElementById('left').ontouchstart=()=>{steering=-0.6;send();};
+  document.getElementById('right').ontouchstart=()=>{steering=0.6;send();};
+  document.getElementById('stop').ontouchstart=halt;
 
-['fwd','back','left','right','stop'].forEach(id=>{
-  document.getElementById(id).ontouchend=halt;
-});
+  ['fwd','back','left','right','stop'].forEach(id=>{
+    document.getElementById(id).ontouchend=halt;
+  });
 
-function restartLeo(){ fetch('/restart',{method:'POST'}); }
-function rebootLeo(){ fetch('/reboot',{method:'POST'}); }
-function updateLeo(){ fetch('/update',{method:'POST'}); }
+  function restartLeo(){ fetch('/restart',{method:'POST'}); }
+  function rebootLeo(){ fetch('/reboot',{method:'POST'}); }
+  function updateLeo(){ fetch('/update',{method:'POST'}); }
 
-function classify(v,w,c,i=false){
-  if(v==='N/A')return'ok';
-  if(i){if(v<=c)return'crit';if(v<=w)return'warn';}
-  else{if(v>=c)return'crit';if(v>=w)return'warn';}
-  return'ok';
-}
+  /* ================= ADDED: ASK LEO LOGIC ================= */
 
-async function updateStats(){
-  try{
-    const s=await fetch('/stats').then(r=>r.json());
-    cpu.textContent=s.cpu; cpu.className=classify(s.cpu,70,85);
-    ram.textContent=s.ram; ram.className=classify(s.ram,70,85);
-    disk.textContent=s.disk; disk.className=classify(s.disk,75,90);
-    temp.textContent=s.temp; temp.className=classify(s.temp,70,80);
-    battery.textContent=s.battery; battery.className=classify(s.battery,11.5,11.0,true);
-  }catch{}
-}
-setInterval(updateStats,1000);
-updateStats();
+  const leoInput = document.getElementById('leoInput');
+  const leoSend = document.getElementById('leoSend');
+  const leoAnswer = document.getElementById('leoAnswer');
+
+  function setLeoAnswer(text, type='info'){
+    leoAnswer.className = `leo-answer ${type}`;
+    leoAnswer.textContent = text;
+  }
+
+  async function askLeo(){
+    const q = leoInput.value.trim();
+    if(!q) return;
+
+    leoInput.value='';
+    setLeoAnswer('Leo is thinking…','info');
+
+    try{
+      const r = await fetch('/ai/command',{
+        method:'POST',
+        headers:{'Content-Type':'application/json'},
+        body:JSON.stringify({prompt:q})
+      });
+      const d = await r.json();
+
+      if(d.confirm) setLeoAnswer(d.message,'warning');
+      else if(d.error) setLeoAnswer(d.error,'error');
+      else if(d.status) setLeoAnswer(d.status,'ok');
+      else if(d.result?.state!==undefined) setLeoAnswer(`Value: ${d.result.state}`,'info');
+      else setLeoAnswer(JSON.stringify(d),'info');
+    }catch{
+      setLeoAnswer('Error talking to Leo','error');
+    }
+  }
+
+  leoSend.onclick = askLeo;
+  leoInput.onkeydown = e => { if(e.key==='Enter') askLeo(); };
+
+  /* ================= EXISTING STATS ================= */
+
+  function classify(v,w,c,i=false){
+    if(v==='N/A')return'ok';
+    if(i){if(v<=c)return'crit';if(v<=w)return'warn';}
+    else{if(v>=c)return'crit';if(v>=w)return'warn';}
+    return'ok';
+  }
+
+  async function updateStats(){
+    try{
+      const s=await fetch('/stats').then(r=>r.json());
+      cpu.textContent=s.cpu; cpu.className=classify(s.cpu,70,85);
+      ram.textContent=s.ram; ram.className=classify(s.ram,70,85);
+      disk.textContent=s.disk; disk.className=classify(s.disk,75,90);
+      temp.textContent=s.temp; temp.className=classify(s.temp,70,80);
+      battery.textContent=s.battery; battery.className=classify(s.battery,11.5,11.0,true);
+    }catch{}
+  }
+  setInterval(updateStats,1000);
+  updateStats();
 </script>
 
 </body>

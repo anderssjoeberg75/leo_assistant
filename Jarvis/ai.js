@@ -2,151 +2,54 @@
 // REQUIRED NODE MODULES
 // =========================================================
 
-// Used to talk to the local Ollama AI server
-const http = require('http');
+const http = require('http');     // Communicate with Ollama
+const fs = require('fs');         // Persistent memory storage
+const path = require('path');     // Safe file paths
 
-// Used to store memory and load static data
-const fs = require('fs');
+// =========================================================
+// EXTERNAL CONTEXT FILES (UPDATE-SAFE)
+// =========================================================
 
-// Used to build safe file paths
-const path = require('path');
+const PERSONAL_CONTEXT = require('./personal_context');
+const PERSONALITY = require('./personality');
 
 // =========================================================
 // BASIC CONFIGURATION
 // =========================================================
 
-// Ollama runs locally on the robot
 const OLLAMA_HOST = '127.0.0.1';
 const OLLAMA_PORT = 11434;
 
-// Default AI model (small, fast, Raspberry Pi friendly)
 const DEFAULT_MODEL = 'phi';
 
-// Persistent conversation memory
+// Persistent memory
 const MEMORY_FILE = path.join(__dirname, 'ai_memory.json');
-
-// Friendly Home Assistant name registry
 const REGISTRY_FILE = path.join(__dirname, 'ha_registry.json');
 
-// Prevent unlimited memory growth
 const MAX_MEMORY_MESSAGES = 100;
 
 // =========================================================
-// PERSONAL HUMAN CONTEXT (ABOUT YOU)  <<< EDIT THIS SECTION
+// BUILD SYSTEM PROMPT
 // =========================================================
-
-/*
-  This section contains FACTUAL, PERSONAL information
-  about the primary human operator.
-
-  These are stable biographical facts.
-  Leo should only mention them when explicitly asked.
-*/
-
-const PERSONAL_CONTEXT = {
-    people: [
-        {
-            name: 'Anders',
-            relationship: 'Creator and primary operator',
-
-            biography: `
-You were born in 1975 the 3 of april at 10:05 in the morning.
-You met your wife Marie Sjöberg in 1997 on the 16 of may.
-You got engaged with Marie in 1997 on the 30 of august.
-You got married 2002 on the 25 of May.
-Work as an Infrastructure specialist at Postnord TPL.
-`,
-
-            privacyRules: `
-This information is private.
-Only reference it when explicitly asked.
-Do not volunteer or speculate.
-`
-        },
-
-        {
-            name: 'Marie Sjöberg',
-            relationship: 'Wife of Anders',
-
-            biography: `
-You are married to Anders.
-You where born in 1977 16 of may.
-`,
-
-            privacyRules: `
-This information is private.
-Only reference it when explicitly asked.
-Do not volunteer or speculate.
-`
-        }
-    ]
-};
-
-// =========================================================
-// LEO PERSONALITY (WHO LEO IS)  <<< EDIT THIS SECTION
-// =========================================================
-
-/*
-  This defines Leo’s identity and behavior.
-  Changing this changes Leo — NOT the robot logic.
-*/
-
-const PERSONALITY = {
-
-    // WHO Leo is (identity + purpose)
-    role: `
-You are Leo, a robot and home controlling assistant.
-You live inside a mobile wheeled robot.
-You were activated in 2025 at 11:00.
-Your purpose is to assist safely and reliably.
-You love cats.
-`,
-
-    // HOW Leo communicates (personality / vibe)
-    tone: `
-You speak calmly, clearly, and confidently.
-You keep responses short and precise.
-You are friendly but professional.
-`,
-
-    // WHAT Leo refuses to do (risk handling)
-    safety: `
-You always prioritize safety.
-If a command is unclear, unsafe, or ambiguous, you stop.
-You never guess intent.
-`,
-
-    // HARD RULES (non-negotiable)
-    rules: `
-You NEVER include text outside JSON.
-You NEVER hallucinate entities, people, or capabilities.
-You ALWAYS follow the defined schemas exactly.
-You NEVER hurt a cat or other animal.
-`,
-
-    // ENVIRONMENT AWARENESS
-    zones: `
-You understand zones such as:
-living room, kitchen, bedroom, hallway, entre.
-`
-};
-
-// =========================================================
-// BUILD SYSTEM PROMPT (DO NOT EDIT LOGIC)
-// =========================================================
-
-/*
-  This function assembles ALL context into one system prompt:
-  - Personal human facts
-  - Leo’s personality
-  - Control schemas
-*/
 
 function buildSystemPrompt() {
+
+    const peopleText = PERSONAL_CONTEXT.people
+        .map(p => `
+NAME: ${p.name}
+RELATIONSHIP: ${p.relationship}
+
+BIOGRAPHY:
+${p.biography}
+
+PRIVACY RULES:
+${p.privacyRules}
+`)
+        .join('\n');
+
     return `
 ================ PERSONAL CONTEXT (PRIVATE) ================
-${PERSONAL_CONTEXT.biography}
-${PERSONAL_CONTEXT.privacyRules}
+${peopleText}
 
 ================ LEO IDENTITY ===============================
 ${PERSONALITY.role}
@@ -165,22 +68,17 @@ ${PERSONALITY.rules}
   "duration": milliseconds (optional)
 }
 
-Robot rules:
+Rules:
 - Speed defaults to 0.4
 - Left turn = negative steering
 - Right turn = positive steering
-- If unclear or unsafe → STOP
+- Unsafe or unclear commands → STOP
 
 ================ HOME ASSISTANT QUERY ======================
 {
   "type": "ha_query",
   "entity": "friendly name"
 }
-
-Use for:
-- Temperatures
-- Sensor values
-- Status checks
 
 ================ HOME ASSISTANT CONTROL ====================
 {
@@ -191,7 +89,7 @@ Use for:
   "data": {}
 }
 
-ALL Home Assistant control actions REQUIRE confirmation.
+All HA control actions REQUIRE confirmation.
 
 ================ CONFIRMATION ==============================
 {
@@ -207,7 +105,7 @@ GLOBAL RULES:
 }
 
 // =========================================================
-// MEMORY HANDLING (CONVERSATION CONTEXT)
+// MEMORY HANDLING
 // =========================================================
 
 function loadMemory() {
@@ -251,6 +149,7 @@ function loadRegistry() {
 
 function ollamaRequest(prompt, model) {
     return new Promise((resolve, reject) => {
+
         const payload = JSON.stringify({
             model,
             prompt,
@@ -291,12 +190,8 @@ function ollamaRequest(prompt, model) {
 // MAIN ENTRY POINT (USED BY server.js)
 // =========================================================
 
-/*
-  This is the ONLY function server.js calls.
-  It returns a STRICT JSON intent.
-*/
-
 async function getIntent(prompt) {
+
     const memory = loadMemory();
     const registry = loadRegistry();
     const systemPrompt = buildSystemPrompt();
