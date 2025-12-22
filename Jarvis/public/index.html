@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
 <meta charset="UTF-8">
-<title>Jarvis Robot</title>
+<title>Leo assistant</title>
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <style>
 body {
@@ -14,10 +14,13 @@ body {
   touch-action: none;
 }
 
+/* === CAMERA STREAM (FIXED 640x480) === */
 #video {
-  width: 100%;
-  max-width: 640px;
-  border-bottom: 2px solid #333;
+  width: 640px;
+  height: 480px;
+  border: 3px solid #444;
+  box-sizing: border-box;
+  object-fit: cover;
 }
 
 .controls {
@@ -48,8 +51,36 @@ button:active { background: #666; }
 #speed {
   -webkit-appearance: slider-vertical;
   width: 40px;
-  height: 260px;
+  height: 200px;
 }
+
+.system-buttons {
+  display: flex;
+  flex-direction: column;
+  gap: 15px;
+}
+
+.system-buttons button {
+  background: #a00000;
+  font-size: 16px;
+  padding: 15px;
+}
+
+.system-buttons button:active {
+  background: #ff0000;
+}
+
+/* === SYSTEM STATS LINE === */
+.stats {
+  margin-top: 18px;
+  font-size: 15px;
+  font-weight: bold;
+  text-align: center;
+}
+
+.ok   { color: #fff; }
+.warn { color: #ffd000; }
+.crit { color: #ff4444; }
 </style>
 </head>
 <body>
@@ -58,24 +89,26 @@ button:active { background: #666; }
 
 <div class="controls">
   <div class="arrows">
-    <div></div>
-    <button id="fwd">⬆️</button>
-    <div></div>
-
-    <button id="left">⬅️</button>
-    <button id="stop">⏹️</button>
-    <button id="right">➡️</button>
-
-    <div></div>
-    <button id="back">⬇️</button>
-    <div></div>
+    <div></div><button id="fwd">⬆️</button><div></div>
+    <button id="left">⬅️</button><button id="stop">⏹️</button><button id="right">➡️</button>
+    <div></div><button id="back">⬇️</button><div></div>
   </div>
 
   <input id="speed" type="range" min="10" max="100" value="50">
+
+  <div class="system-buttons">
+    <button onclick="restartLeo()">Restart Leo</button>
+    <button onclick="rebootLeo()">Reboot Leo</button>
+  </div>
 </div>
 
-<br>
-<button onclick="restart()">Restart Jarvis</button>
+<div class="stats">
+  CPU: <span id="cpu"></span>% |
+  RAM: <span id="ram"></span>% |
+  Disk: <span id="disk"></span>% |
+  Temp: <span id="temp"></span>°C |
+  Battery: <span id="battery"></span>V
+</div>
 
 <script src="/socket.io/socket.io.js"></script>
 <script>
@@ -83,19 +116,13 @@ const socket = io();
 let speed = 0.5;
 let steering = 0;
 
-const speedSlider = document.getElementById('speed');
-speedSlider.oninput = () => speed = speedSlider.value / 100;
+document.getElementById('speed').oninput = e => speed = e.target.value / 100;
 
-function send() {
-  socket.emit('drive', { speed, steering });
-}
-
-function halt() {
-  socket.emit('drive', { speed: 0, steering: 0 });
-}
+function send() { socket.emit('drive', { speed, steering }); }
+function halt() { socket.emit('drive', { speed: 0, steering: 0 }); }
 
 document.getElementById('fwd').ontouchstart = () => { steering = 0; send(); };
-document.getElementById('back').ontouchstart = () => { steering = 0; send(); speed = -Math.abs(speed); send(); };
+document.getElementById('back').ontouchstart = () => { steering = 0; speed = -Math.abs(speed); send(); };
 document.getElementById('left').ontouchstart = () => { steering = -0.6; send(); };
 document.getElementById('right').ontouchstart = () => { steering = 0.6; send(); };
 document.getElementById('stop').ontouchstart = halt;
@@ -104,9 +131,49 @@ document.getElementById('stop').ontouchstart = halt;
   document.getElementById(id).ontouchend = halt;
 });
 
-function restart() {
+function restartLeo() {
   fetch('/restart', { method: 'POST' });
 }
+
+function rebootLeo() {
+  fetch('/reboot', { method: 'POST' });
+}
+
+function classify(value, warn, crit, invert=false) {
+  if (value === 'N/A') return 'ok';
+  if (invert) {
+    if (value <= crit) return 'crit';
+    if (value <= warn) return 'warn';
+  } else {
+    if (value >= crit) return 'crit';
+    if (value >= warn) return 'warn';
+  }
+  return 'ok';
+}
+
+async function updateStats() {
+  try {
+    const s = await fetch('/stats').then(r => r.json());
+
+    cpu.textContent = s.cpu;
+    cpu.className = classify(s.cpu, 70, 85);
+
+    ram.textContent = s.ram;
+    ram.className = classify(s.ram, 70, 85);
+
+    disk.textContent = s.disk;
+    disk.className = classify(s.disk, 75, 90);
+
+    temp.textContent = s.temp;
+    temp.className = classify(s.temp, 70, 80);
+
+    battery.textContent = s.battery;
+    battery.className = classify(s.battery, 11.5, 11.0, true);
+  } catch {}
+}
+
+setInterval(updateStats, 1000);
+updateStats();
 </script>
 
 </body>
