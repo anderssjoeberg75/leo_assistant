@@ -28,7 +28,7 @@ sudo chown $USER:$USER /opt/jarvis
 ```
 Clone the repositopry
 ``` 
-git clone https://github.com/anderssjoeberg75/jarvisassistant.git /opt/
+git clone https://github.com/anderssjoeberg75/leo_assistant.git /opt/
 ``` 
 reboot Raspberry pi
 ``` 
