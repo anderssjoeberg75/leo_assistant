@@ -1,0 +1,7 @@
+{
+  "living room temperature": "sensor.livingroom_temperature",
+  "bedroom temperature": "sensor.bedroom_temperature",
+  "kitchen light": "light.kitchen",
+  "hallway light": "light.hallway",
+  "bedroom thermostat": "climate.bedroom"
+}

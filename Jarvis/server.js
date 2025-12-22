@@ -1,119 +1,121 @@
 const express = require('express');
 const http = require('http');
 const { Server } = require('socket.io');
+
 const motor = require('./motor');
-const { exec, execSync } = require('child_process');
-const os = require('os');
-const fs = require('fs');
-const i2c = require('i2c-bus');
+const ai = require('./ai');
+const ha = require('./homeassistant');
+const registry = require('./ha_registry.json');
 
 const app = express();
 const server = http.createServer(app);
 const io = new Server(server);
 
-let failsafeTimer;
-
-/* ================= FAILSAFE ================= */
-function resetFailsafe() {
-  clearTimeout(failsafeTimer);
-  failsafeTimer = setTimeout(() => motor.stop(), 1000);
-}
-
+// Parse JSON bodies
+app.use(express.json());
 app.use(express.static('public'));
 
-/* ================= SYSTEM ACTIONS ================= */
-app.post('/restart', (req, res) => {
-  res.sendStatus(200);
-  setTimeout(() => exec('systemctl restart jarvis', () => {}), 500);
-});
+// Store pending HA action awaiting confirmation
+let pendingHAAction = null;
 
-app.post('/reboot', (req, res) => {
-  res.sendStatus(200);
-  setTimeout(() => exec('reboot', () => {}), 500);
-});
+/* =========================================================
+   AI → ROBOT / HOME ASSISTANT ENDPOINT
+   ========================================================= */
 
-/* ================= ADS1115 SETUP ================= */
-const ADS1115_ADDR = 0x48;
-const ADS_CONFIG = 0x01;
-const ADS_CONVERT = 0x00;
-
-/*
-  Voltage divider ratio:
-  Example: 100k + 20k → ratio = (100 + 20) / 20 = 6
-  ADJUST THIS TO MATCH YOUR HARDWARE
-*/
-const VOLTAGE_DIVIDER_RATIO = 6.0;
-
-// Open I2C bus
-let i2cBus;
-try {
-  i2cBus = i2c.openSync(1);
-} catch {
-  i2cBus = null;
-}
-
-/* Read battery voltage from ADS1115 AIN0 */
-function readBatteryVoltageADS() {
-  if (!i2cBus) return 'N/A';
-
+app.post('/ai/command', async (req, res) => {
   try {
-    // Configure ADS1115:
-    // AIN0 single-ended, ±4.096V, single-shot, 128 SPS
-    const config =
-      0x8000 | // Start conversion
-      0x4000 | // AIN0
-      0x0200 | // ±4.096V
-      0x0100 | // Single-shot
-      0x0080 | // 128 SPS
-      0x0003;  // Disable comparator
+    const { prompt, confirm } = req.body;
 
-    const buf = Buffer.alloc(2);
-    buf.writeUInt16BE(config);
-    i2cBus.writeI2cBlockSync(ADS1115_ADDR, ADS_CONFIG, 2, buf);
+    // Handle confirmation
+    if (confirm && pendingHAAction) {
+      const action = pendingHAAction;
+      pendingHAAction = null;
 
-    // Wait for conversion
-    Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, 9);
+      await ha.callService(
+          action.domain,
+          action.service,
+          { entity_id: action.entity_id, ...action.data }
+      );
 
-    // Read result
-    i2cBus.readI2cBlockSync(ADS1115_ADDR, ADS_CONVERT, 2, buf);
-    const raw = buf.readInt16BE();
+      return res.json({ status: 'executed' });
+    }
 
-    // ADS1115 LSB = 125µV at ±4.096V
-    const voltage = raw * 0.000125 * VOLTAGE_DIVIDER_RATIO;
-    return voltage.toFixed(2);
-  } catch {
-    return 'N/A';
+    // Get AI intent
+    const intent = await ai.getIntent(prompt);
+
+    /* ---------------- ROBOT CONTROL ---------------- */
+    if (intent.type === 'robot') {
+      if (intent.action === 'stop') {
+        motor.stop();
+        return res.json({ status: 'robot stopped' });
+      }
+
+      motor.setTank(
+          Math.max(0, Math.min(1, intent.speed ?? 0.4)),
+          Math.max(-1, Math.min(1, intent.steering ?? 0))
+      );
+
+      if (intent.duration) {
+        setTimeout(() => motor.stop(), Math.min(intent.duration, 5000));
+      }
+
+      return res.json({ status: 'robot command executed' });
+    }
+
+    /* ---------------- HOME ASSISTANT QUERY ---------------- */
+    if (intent.type === 'ha_query') {
+      const entityId = registry[intent.entity];
+      if (!entityId) {
+        return res.json({ error: 'Unknown entity' });
+      }
+
+      const state = await ha.getState(entityId);
+      return res.json({ result: state });
+    }
+
+    /* ---------------- HOME ASSISTANT CONTROL ---------------- */
+    if (intent.type === 'ha_control') {
+      const entityId = registry[intent.entity];
+      if (!entityId) {
+        return res.json({ error: 'Unknown entity' });
+      }
+
+      pendingHAAction = {
+        domain: intent.domain,
+        service: intent.service,
+        entity_id: entityId,
+        data: intent.data || {}
+      };
+
+      return res.json({
+        confirm: true,
+        message: `Do you want me to ${intent.service.replace('_', ' ')} ${intent.entity}?`
+      });
+    }
+
+    res.json({ status: 'no action' });
+  } catch (err) {
+    motor.stop(); // safety fallback
+    res.status(500).json({ error: err.message });
   }
-}
-
-/* ================= STATS ENDPOINT ================= */
-app.get('/stats', (req, res) => {
-  const load = os.loadavg()[0];
-  const cpuCount = os.cpus().length;
-  const cpu = Math.min(100, Math.round((load / cpuCount) * 100));
-
-  const ram = Math.round(((os.totalmem() - os.freemem()) / os.totalmem()) * 100);
-
-  let temp = 'N/A';
-  try {
-    temp = (fs.readFileSync('/sys/class/thermal/thermal_zone0/temp') / 1000).toFixed(1);
-  } catch {}
-
-  let disk = 'N/A';
-  try {
-    disk = parseInt(execSync("df / | tail -1 | awk '{print $5}'").toString(), 10);
-  } catch {}
-
-  const battery = readBatteryVoltageADS();
-
-  res.json({ cpu, ram, temp, disk, battery });
 });
 
-/* ================= SOCKET.IO ================= */
-io.on('connection', socket => {
-  resetFailsafe();
+/* =========================================================
+   MANUAL ROBOT CONTROL (UI OVERRIDE)
+   ========================================================= */
 
-  socket.on('drive', data => {
-    resetFailsafe();
-    motor.setTank(data.speed, data.steering);
+io.on('connection', socket => {
+  socket.on('drive', d => {
+    motor.setTank(d.speed, d.steering);
   });
+
+  socket.on('disconnect', () => motor.stop());
+});
+
+/* =========================================================
+   START SERVER
+   ========================================================= */
+
+server.listen(3000, () => {
+  console.log('Leo robot + Home Assistant control running');
+});
