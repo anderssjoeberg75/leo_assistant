@@ -1,7 +1,7 @@
 # jarvisassistant
 Install and update all that is needed
 
-Updates sources and upgrade Raspberry Pi and at the end removes no needed packages
+Updates sources and upgrade Raspberry Pi and removes no needed packages
 ``` 
 sudo apt update && apt upgrade y -f && sudo apt autoremove -y 
 ```
