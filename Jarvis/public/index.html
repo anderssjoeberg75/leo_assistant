@@ -2,8 +2,9 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8">
-  <title>Leo the assistant</title>
+  <title>Leo the Assistant</title>
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
+
   <style>
     body {
       margin: 0;
@@ -22,8 +23,6 @@
       object-fit: cover;
     }
 
-    /* ================= ADDED: ASK LEO ================= */
-
     .leo-chat {
       width: 640px;
       margin: 10px auto 5px auto;
@@ -33,10 +32,11 @@
     .leo-input-row {
       display: flex;
       gap: 6px;
+      align-items: center;
     }
 
     .leo-input {
-      flex: 1;
+      width: 100%;
       padding: 8px;
       font-size: 15px;
       font-weight: bold;
@@ -46,18 +46,15 @@
     }
 
     .leo-send {
-      padding: 8px 14px;
+      height: 36px;
+      padding: 0 14px;
       font-size: 14px;
       font-weight: bold;
       border-radius: 6px;
       border: none;
-      cursor: pointer;
       background: #a00000;
       color: #fff;
-    }
-
-    .leo-send:active {
-      background: #ff0000;
+      cursor: pointer;
     }
 
     .leo-answer {
@@ -67,21 +64,15 @@
       font-size: 15px;
       font-weight: bold;
       border-radius: 6px;
+      background: #1c1c1c;
+      color: #6fd3ff;
     }
-
-    /* Answer colors */
-    .info    { background: #1c1c1c; color: #6fd3ff; }
-    .ok      { background: #1b5e20; color: #c8e6c9; }
-    .warning { background: #f9a825; color: #000; }
-    .error   { background: #b71c1c; color: #ffcdd2; }
-
-    /* ================= EXISTING STYLES ================= */
 
     .controls {
       display: flex;
       justify-content: center;
       align-items: center;
-      gap: 20px;
+      gap: 30px;
       margin-top: 15px;
     }
 
@@ -100,9 +91,29 @@
       font-size: 20px;
     }
 
-    button:active { background: #666; }
+    .right-panel {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 18px;
+    }
 
-    #speed {
+    .sliders {
+      display: flex;
+      gap: 18px;
+      align-items: flex-end;
+    }
+
+    .slider-group {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 6px;
+      font-size: 13px;
+      font-weight: bold;
+    }
+
+    input[type="range"] {
       -webkit-appearance: slider-vertical;
       width: 40px;
       height: 150px;
@@ -111,17 +122,14 @@
     .system-buttons {
       display: flex;
       flex-direction: column;
-      gap: 15px;
+      gap: 12px;
     }
 
     .system-buttons button {
       background: #a00000;
       font-size: 14px;
       padding: 12px;
-    }
-
-    .system-buttons button:active {
-      background: #ff0000;
+      width: 120px;
     }
 
     .stats {
@@ -129,41 +137,51 @@
       font-size: 15px;
       font-weight: bold;
     }
-
-    .ok { color:#fff; }
-    .warn { color:#ffd000; }
-    .crit { color:#ff4444; }
   </style>
 </head>
+
 <body>
 
 <img id="video" src="http://YOUR_PI_IP:8888">
 
-<!-- ================= ADDED: ASK LEO UI ================= -->
-
 <div class="leo-chat">
-  <div class="leo-input-row">
-    <input id="leoInput" class="leo-input" type="text" placeholder="Ask Leo..." autocomplete="off">
-    <button id="leoSend" class="leo-send">Send</button>
-  </div>
-  <div id="leoAnswer" class="leo-answer info"></div>
+  <form id="leoForm">
+    <div class="leo-input-row">
+      <input id="leoInput" class="leo-input" placeholder="Ask Leo..." autocomplete="off">
+      <button class="leo-send" type="submit">Send</button>
+    </div>
+  </form>
+  <div id="leoAnswer" class="leo-answer">Ready.</div>
 </div>
 
-<!-- ================= END ADDED ================= -->
-
 <div class="controls">
+
   <div class="arrows">
     <div></div><button id="fwd">⬆️</button><div></div>
     <button id="left">⬅️</button><button id="stop">⏹️</button><button id="right">➡️</button>
     <div></div><button id="back">⬇️</button><div></div>
   </div>
 
-  <input id="speed" type="range" min="10" max="100" value="50">
+  <div class="right-panel">
 
-  <div class="system-buttons">
-    <button onclick="restartLeo()">Restart</button>
-    <button onclick="rebootLeo()">Reboot</button>
-    <button onclick="updateLeo()">Update</button>
+    <div class="sliders">
+      <div class="slider-group">
+        <span>Speed</span>
+        <input id="speed" type="range" min="10" max="100" value="50">
+      </div>
+
+      <div class="slider-group">
+        <span>LED</span>
+        <input id="led" type="range" min="0" max="100" value="0">
+      </div>
+    </div>
+
+    <div class="system-buttons">
+      <button onclick="restartLeo()">Restart</button>
+      <button onclick="rebootLeo()">Reboot</button>
+      <button onclick="updateLeo()">Update</button>
+    </div>
+
   </div>
 </div>
 
@@ -178,88 +196,59 @@
 <script src="/socket.io/socket.io.js"></script>
 <script>
   const socket = io();
+
   let speed = 0.5;
   let steering = 0;
 
-  document.getElementById('speed').oninput = e => speed = e.target.value / 100;
+  document.getElementById('speed').oninput = e => {
+    speed = e.target.value / 100;
+  };
 
-  function send(){ socket.emit('drive',{speed,steering}); }
-  function halt(){ socket.emit('drive',{speed:0,steering:0}); }
+  document.getElementById('led').oninput = e => {
+    const value = e.target.value / 100;
+    socket.emit('led', { value });
+  };
 
-  document.getElementById('fwd').ontouchstart=()=>{steering=0;send();};
-  document.getElementById('back').ontouchstart=()=>{steering=0;speed=-Math.abs(speed);send();};
-  document.getElementById('left').ontouchstart=()=>{steering=-0.6;send();};
-  document.getElementById('right').ontouchstart=()=>{steering=0.6;send();};
-  document.getElementById('stop').ontouchstart=halt;
+  function send() {
+    socket.emit('drive', { speed, steering });
+  }
 
-  ['fwd','back','left','right','stop'].forEach(id=>{
-    document.getElementById(id).ontouchend=halt;
+  function halt() {
+    socket.emit('drive', { speed: 0, steering: 0 });
+  }
+
+  ['fwd', 'back', 'left', 'right'].forEach(id => {
+    const b = document.getElementById(id);
+    b.ontouchstart = () => {
+      steering = id === 'left' ? -0.6 : id === 'right' ? 0.6 : 0;
+      send();
+    };
+    b.ontouchend = halt;
   });
+
+  document.getElementById('stop').ontouchstart = halt;
 
   function restartLeo(){ fetch('/restart',{method:'POST'}); }
   function rebootLeo(){ fetch('/reboot',{method:'POST'}); }
   function updateLeo(){ fetch('/update',{method:'POST'}); }
 
-  /* ================= ADDED: ASK LEO LOGIC ================= */
-
-  const leoInput = document.getElementById('leoInput');
-  const leoSend = document.getElementById('leoSend');
-  const leoAnswer = document.getElementById('leoAnswer');
-
-  function setLeoAnswer(text, type='info'){
-    leoAnswer.className = `leo-answer ${type}`;
-    leoAnswer.textContent = text;
-  }
-
-  async function askLeo(){
+  const leoForm = document.getElementById('leoForm');
+  leoForm.addEventListener('submit', e => {
+    e.preventDefault();
     const q = leoInput.value.trim();
-    if(!q) return;
+    if (!q) return;
+    leoInput.value = '';
+    leoAnswer.textContent = 'Leo is thinking…';
 
-    leoInput.value='';
-    setLeoAnswer('Leo is thinking…','info');
-
-    try{
-      const r = await fetch('/ai/command',{
-        method:'POST',
-        headers:{'Content-Type':'application/json'},
-        body:JSON.stringify({prompt:q})
-      });
-      const d = await r.json();
-
-      if(d.confirm) setLeoAnswer(d.message,'warning');
-      else if(d.error) setLeoAnswer(d.error,'error');
-      else if(d.status) setLeoAnswer(d.status,'ok');
-      else if(d.result?.state!==undefined) setLeoAnswer(`Value: ${d.result.state}`,'info');
-      else setLeoAnswer(JSON.stringify(d),'info');
-    }catch{
-      setLeoAnswer('Error talking to Leo','error');
-    }
-  }
-
-  leoSend.onclick = askLeo;
-  leoInput.onkeydown = e => { if(e.key==='Enter') askLeo(); };
-
-  /* ================= EXISTING STATS ================= */
-
-  function classify(v,w,c,i=false){
-    if(v==='N/A')return'ok';
-    if(i){if(v<=c)return'crit';if(v<=w)return'warn';}
-    else{if(v>=c)return'crit';if(v>=w)return'warn';}
-    return'ok';
-  }
-
-  async function updateStats(){
-    try{
-      const s=await fetch('/stats').then(r=>r.json());
-      cpu.textContent=s.cpu; cpu.className=classify(s.cpu,70,85);
-      ram.textContent=s.ram; ram.className=classify(s.ram,70,85);
-      disk.textContent=s.disk; disk.className=classify(s.disk,75,90);
-      temp.textContent=s.temp; temp.className=classify(s.temp,70,80);
-      battery.textContent=s.battery; battery.className=classify(s.battery,11.5,11.0,true);
-    }catch{}
-  }
-  setInterval(updateStats,1000);
-  updateStats();
+    fetch('/ai/command', {
+      method:'POST',
+      headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({prompt:q})
+    })
+            .then(r=>r.json())
+            .then(d=>leoAnswer.textContent=d.message||'OK')
+            .catch(()=>leoAnswer.textContent='Error talking to Leo.');
+  });
 </script>
 
 </body>

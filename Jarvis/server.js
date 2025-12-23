@@ -3,119 +3,93 @@ const http = require('http');
 const { Server } = require('socket.io');
 
 const motor = require('./motor');
-const ai = require('./ai');
-const ha = require('./homeassistant');
-const registry = require('./ha_registry.json');
+const led = require('./led');
 
 const app = express();
 const server = http.createServer(app);
 const io = new Server(server);
 
-// Parse JSON bodies
 app.use(express.json());
 app.use(express.static('public'));
 
-// Store pending HA action awaiting confirmation
-let pendingHAAction = null;
+// ================= SOCKET.IO =================
 
-/* =========================================================
-   AI → ROBOT / HOME ASSISTANT ENDPOINT
-   ========================================================= */
+io.on('connection', socket => {
+  console.log('Client connected');
+
+  socket.on('drive', ({ speed, steering }) => {
+    motor.setTank(speed, steering);
+  });
+
+  socket.on('led', ({ value }) => {
+    led.setLed(value);
+  });
+
+  socket.on('disconnect', () => {
+    motor.stop();
+    led.off();
+  });
+});
+
+// ================= AI (UNCHANGED) =================
+
+const OLLAMA_HOST = '192.168.107.169';
+const OLLAMA_PORT = 11434;
+const MODEL = 'gemma2:2b';
+
+function askOllama(prompt) {
+  return new Promise((resolve, reject) => {
+    const payload = JSON.stringify({
+      model: MODEL,
+      prompt,
+      stream: false
+    });
+
+    const req = http.request(
+        {
+          hostname: OLLAMA_HOST,
+          port: OLLAMA_PORT,
+          path: '/api/generate',
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Content-Length': Buffer.byteLength(payload)
+          }
+        },
+        res => {
+          let body = '';
+          res.on('data', d => body += d);
+          res.on('end', () => {
+            try {
+              resolve(JSON.parse(body).response || 'No answer.');
+            } catch {
+              reject();
+            }
+          });
+        }
+    );
+
+    req.on('error', reject);
+    req.write(payload);
+    req.end();
+  });
+}
 
 app.post('/ai/command', async (req, res) => {
+  if (!req.body.prompt) {
+    return res.json({ message: 'Please ask something.' });
+  }
+
   try {
-    const { prompt, confirm } = req.body;
-
-    // Handle confirmation
-    if (confirm && pendingHAAction) {
-      const action = pendingHAAction;
-      pendingHAAction = null;
-
-      await ha.callService(
-          action.domain,
-          action.service,
-          { entity_id: action.entity_id, ...action.data }
-      );
-
-      return res.json({ status: 'executed' });
-    }
-
-    // Get AI intent
-    const intent = await ai.getIntent(prompt);
-
-    /* ---------------- ROBOT CONTROL ---------------- */
-    if (intent.type === 'robot') {
-      if (intent.action === 'stop') {
-        motor.stop();
-        return res.json({ status: 'robot stopped' });
-      }
-
-      motor.setTank(
-          Math.max(0, Math.min(1, intent.speed ?? 0.4)),
-          Math.max(-1, Math.min(1, intent.steering ?? 0))
-      );
-
-      if (intent.duration) {
-        setTimeout(() => motor.stop(), Math.min(intent.duration, 5000));
-      }
-
-      return res.json({ status: 'robot command executed' });
-    }
-
-    /* ---------------- HOME ASSISTANT QUERY ---------------- */
-    if (intent.type === 'ha_query') {
-      const entityId = registry[intent.entity];
-      if (!entityId) {
-        return res.json({ error: 'Unknown entity' });
-      }
-
-      const state = await ha.getState(entityId);
-      return res.json({ result: state });
-    }
-
-    /* ---------------- HOME ASSISTANT CONTROL ---------------- */
-    if (intent.type === 'ha_control') {
-      const entityId = registry[intent.entity];
-      if (!entityId) {
-        return res.json({ error: 'Unknown entity' });
-      }
-
-      pendingHAAction = {
-        domain: intent.domain,
-        service: intent.service,
-        entity_id: entityId,
-        data: intent.data || {}
-      };
-
-      return res.json({
-        confirm: true,
-        message: `Do you want me to ${intent.service.replace('_', ' ')} ${intent.entity}?`
-      });
-    }
-
-    res.json({ status: 'no action' });
-  } catch (err) {
-    motor.stop(); // safety fallback
-    res.status(500).json({ error: err.message });
+    const answer = await askOllama(req.body.prompt);
+    res.json({ message: answer });
+  } catch {
+    res.json({ message: 'Leo is having trouble answering.' });
   }
 });
 
-/* =========================================================
-   MANUAL ROBOT CONTROL (UI OVERRIDE)
-   ========================================================= */
-
-io.on('connection', socket => {
-  socket.on('drive', d => {
-    motor.setTank(d.speed, d.steering);
-  });
-
-  socket.on('disconnect', () => motor.stop());
-});
-
-/* =========================================================
-   START SERVER
-   ========================================================= */
+// ================= START =================
 
 server.listen(3000, () => {
-  console.log('Leo robot + Home Assistant control running');
+  console.log('Leo server running');
 });
