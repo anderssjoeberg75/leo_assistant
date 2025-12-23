@@ -3,7 +3,7 @@ Install and update all that is needed
 
 Updates sources and upgrade Raspberry Pi and removes no needed packages
 ``` 
-sudo apt update && apt upgrade y -f && sudo apt autoremove -y 
+sudo apt update && sudo apt upgrade y -f && sudo apt autoremove -y 
 ```
 ``` 
 sudo apt install -y  rpicam-apps libcamera0 v4l-utils pigpio ustreamer git -y -f
