@@ -1,43 +1,15 @@
 const express = require('express');
 const http = require('http');
-const { Server } = require('socket.io');
-
-const motor = require('./motor');
-const led = require('./led');
 
 const app = express();
-const server = http.createServer(app);
-const io = new Server(server);
-
 app.use(express.json());
 app.use(express.static('public'));
-
-// ================= SOCKET.IO =================
-
-io.on('connection', socket => {
-  console.log('Client connected');
-
-  socket.on('drive', ({ speed, steering }) => {
-    motor.setTank(speed, steering);
-  });
-
-  socket.on('led', ({ value }) => {
-    led.setLed(value);
-  });
-
-  socket.on('disconnect', () => {
-    motor.stop();
-    led.off();
-  });
-});
-
-// ================= AI (UNCHANGED) =================
 
 const OLLAMA_HOST = '192.168.107.169';
 const OLLAMA_PORT = 11434;
 const MODEL = 'gemma2:2b';
 
-function askOllama(prompt) {
+function askOllama(prompt, timeoutMs = 15000) {
   return new Promise((resolve, reject) => {
     const payload = JSON.stringify({
       model: MODEL,
@@ -61,9 +33,10 @@ function askOllama(prompt) {
           res.on('data', d => body += d);
           res.on('end', () => {
             try {
-              resolve(JSON.parse(body).response || 'No answer.');
+              const parsed = JSON.parse(body);
+              resolve(parsed.response || 'No answer.');
             } catch {
-              reject();
+              reject(new Error('Invalid Ollama response'));
             }
           });
         }
@@ -72,24 +45,32 @@ function askOllama(prompt) {
     req.on('error', reject);
     req.write(payload);
     req.end();
+
+    setTimeout(() => {
+      req.destroy();
+      reject(new Error('Ollama timeout'));
+    }, timeoutMs);
   });
 }
 
 app.post('/ai/command', async (req, res) => {
-  if (!req.body.prompt) {
+  const { prompt } = req.body;
+
+  if (!prompt || !prompt.trim()) {
     return res.json({ message: 'Please ask something.' });
   }
 
   try {
-    const answer = await askOllama(req.body.prompt);
-    res.json({ message: answer });
-  } catch {
-    res.json({ message: 'Leo is having trouble answering.' });
+    const answer = await askOllama(prompt);
+    return res.json({ message: answer });
+  } catch (err) {
+    return res.json({
+      message: 'Leo is having trouble answering right now.'
+    });
   }
 });
 
-// ================= START =================
-
-server.listen(3000, () => {
-  console.log('Leo server running');
+app.listen(3000, () => {
+  console.log('Leo AI server running (stable mode)');
 });
+             

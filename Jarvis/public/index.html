@@ -36,7 +36,7 @@
     }
 
     .leo-input {
-      width: 100%;
+      width: 640px;
       padding: 8px;
       font-size: 15px;
       font-weight: bold;
@@ -57,6 +57,8 @@
       cursor: pointer;
     }
 
+    .leo-send:active { background:#ff0000; }
+
     .leo-answer {
       margin-top: 6px;
       padding: 8px;
@@ -69,73 +71,51 @@
     }
 
     .controls {
-      display: flex;
-      justify-content: center;
-      align-items: center;
-      gap: 30px;
-      margin-top: 15px;
+      display:flex;
+      justify-content:center;
+      gap:20px;
+      margin-top:15px;
     }
 
     .arrows {
-      display: grid;
-      grid-template-columns: 80px 80px 80px;
-      grid-template-rows: 80px 80px 80px;
-      gap: 10px;
+      display:grid;
+      grid-template-columns:80px 80px 80px;
+      grid-template-rows:80px 80px 80px;
+      gap:10px;
     }
 
     button {
-      background: #333;
-      color: #fff;
-      border: none;
-      border-radius: 12px;
-      font-size: 20px;
+      background:#333;
+      color:#fff;
+      border:none;
+      border-radius:12px;
+      font-size:20px;
     }
 
-    .right-panel {
-      display: flex;
-      flex-direction: column;
-      align-items: center;
-      gap: 18px;
-    }
+    button:active { background:#666; }
 
-    .sliders {
-      display: flex;
-      gap: 18px;
-      align-items: flex-end;
-    }
-
-    .slider-group {
-      display: flex;
-      flex-direction: column;
-      align-items: center;
-      gap: 6px;
-      font-size: 13px;
-      font-weight: bold;
-    }
-
-    input[type="range"] {
+    #speed {
       -webkit-appearance: slider-vertical;
-      width: 40px;
-      height: 150px;
+      width:40px;
+      height:150px;
     }
 
     .system-buttons {
-      display: flex;
-      flex-direction: column;
-      gap: 12px;
+      display:flex;
+      flex-direction:column;
+      gap:15px;
     }
 
     .system-buttons button {
-      background: #a00000;
-      font-size: 14px;
-      padding: 12px;
-      width: 120px;
+      background:#a00000;
+      font-size:14px;
+      padding:12px;
     }
 
     .stats {
-      margin-top: 18px;
-      font-size: 15px;
-      font-weight: bold;
+      margin-top:18px;
+      font-size:15px;
+      font-weight:bold;
     }
   </style>
 </head>
@@ -144,44 +124,33 @@
 
 <img id="video" src="http://YOUR_PI_IP:8888">
 
+<!-- ================= ASK LEO (FORM ONLY AROUND INPUT) ================= -->
+
 <div class="leo-chat">
   <form id="leoForm">
     <div class="leo-input-row">
       <input id="leoInput" class="leo-input" placeholder="Ask Leo..." autocomplete="off">
-      <button class="leo-send" type="submit">Send</button>
+      <button id="leoSend" class="leo-send" type="submit">Send</button>
     </div>
   </form>
   <div id="leoAnswer" class="leo-answer">Ready.</div>
 </div>
 
-<div class="controls">
+<!-- ================= CONTROLS ================= -->
 
+<div class="controls">
   <div class="arrows">
     <div></div><button id="fwd">⬆️</button><div></div>
     <button id="left">⬅️</button><button id="stop">⏹️</button><button id="right">➡️</button>
     <div></div><button id="back">⬇️</button><div></div>
   </div>
 
-  <div class="right-panel">
+  <input id="speed" type="range" min="10" max="100" value="50">
 
-    <div class="sliders">
-      <div class="slider-group">
-        <span>Speed</span>
-        <input id="speed" type="range" min="10" max="100" value="50">
-      </div>
-
-      <div class="slider-group">
-        <span>LED</span>
-        <input id="led" type="range" min="0" max="100" value="0">
-      </div>
-    </div>
-
-    <div class="system-buttons">
-      <button onclick="restartLeo()">Restart</button>
-      <button onclick="rebootLeo()">Reboot</button>
-      <button onclick="updateLeo()">Update</button>
-    </div>
-
+  <div class="system-buttons">
+    <button onclick="restartLeo()">Restart</button>
+    <button onclick="rebootLeo()">Reboot</button>
+    <button onclick="updateLeo()">Update</button>
   </div>
 </div>
 
@@ -196,51 +165,37 @@
 <script src="/socket.io/socket.io.js"></script>
 <script>
   const socket = io();
-
   let speed = 0.5;
   let steering = 0;
 
-  document.getElementById('speed').oninput = e => {
-    speed = e.target.value / 100;
-  };
+  document.getElementById('speed').oninput = e => speed = e.target.value / 100;
 
-  document.getElementById('led').oninput = e => {
-    const value = e.target.value / 100;
-    socket.emit('led', { value });
-  };
+  function send(){ socket.emit('drive',{speed,steering}); }
+  function halt(){ socket.emit('drive',{speed:0,steering:0}); }
 
-  function send() {
-    socket.emit('drive', { speed, steering });
-  }
-
-  function halt() {
-    socket.emit('drive', { speed: 0, steering: 0 });
-  }
-
-  ['fwd', 'back', 'left', 'right'].forEach(id => {
-    const b = document.getElementById(id);
-    b.ontouchstart = () => {
-      steering = id === 'left' ? -0.6 : id === 'right' ? 0.6 : 0;
-      send();
-    };
-    b.ontouchend = halt;
+  ['fwd','back','left','right'].forEach(id=>{
+    const b=document.getElementById(id);
+    b.ontouchstart=()=>{ steering=id==='left'?-0.6:id==='right'?0.6:0; send(); };
+    b.ontouchend=halt;
   });
 
-  document.getElementById('stop').ontouchstart = halt;
+  document.getElementById('stop').ontouchstart=halt;
 
   function restartLeo(){ fetch('/restart',{method:'POST'}); }
   function rebootLeo(){ fetch('/reboot',{method:'POST'}); }
   function updateLeo(){ fetch('/update',{method:'POST'}); }
 
-  const leoForm = document.getElementById('leoForm');
-  leoForm.addEventListener('submit', e => {
-    e.preventDefault();
-    const q = leoInput.value.trim();
-    if (!q) return;
-    leoInput.value = '';
-    leoAnswer.textContent = 'Leo is thinking…';
+  const leoForm   = document.getElementById('leoForm');
+  const leoInput  = document.getElementById('leoInput');
+  const leoAnswer = document.getElementById('leoAnswer');
 
-    fetch('/ai/command', {
+  function askLeo(){
+    const q = leoInput.value.trim();
+    if(!q) return;
+    leoInput.value='';
+    leoAnswer.textContent='Leo is thinking…';
+
+    fetch('/ai/command',{
       method:'POST',
       headers:{'Content-Type':'application/json'},
       body:JSON.stringify({prompt:q})
@@ -248,6 +203,12 @@
             .then(r=>r.json())
             .then(d=>leoAnswer.textContent=d.message||'OK')
             .catch(()=>leoAnswer.textContent='Error talking to Leo.');
+  }
+
+  // ✅ ENTER KEY WORKS HERE — NO BUTTONS REMOVED
+  leoForm.addEventListener('submit', e=>{
+    e.preventDefault();
+    askLeo();
   });
 </script>
 
