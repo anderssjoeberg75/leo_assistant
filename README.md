@@ -17,8 +17,6 @@ Prepare folders and get the code
 Create folder for the webapp and the script folder
 ```
 sudo mkdir -p /opt/jarvis
-```
-```
 sudo mkdir -p /opt/script
 ```
 Set correct owner of the folder
