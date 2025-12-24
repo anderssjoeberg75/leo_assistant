@@ -1,4 +1,7 @@
 # The Leo assistant
+Components needed
+L298N motor controller
+
 Install and update all that is needed
 
 Updates sources and upgrade Raspberry Pi and removes no needed packages
