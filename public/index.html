@@ -1,0 +1,170 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Leo the assistant</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+
+  <style>
+    body {
+      margin: 0;
+      background: #0b0b0b;
+      color: #fff;
+      font-family: Arial, sans-serif;
+      text-align: center;
+    }
+
+    #page {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+    }
+
+    #camera {
+      max-width: 100%;
+      height: auto;
+    }
+
+    #bottom {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      margin-top: 25px;
+      gap: 30px;
+    }
+
+    /* --- D-PAD --- */
+    #dpad {
+      display: grid;
+      grid-template-columns: 70px 70px 70px;
+      grid-template-rows: 70px 70px 70px;
+      gap: 12px;
+    }
+
+    .dbtn {
+      background: #bdb6b6;
+      border: none;
+      border-radius: 12px;
+      color: #000;
+      font-size: 24px;
+      font-weight: bold;
+      cursor: pointer;
+      user-select: none;
+    }
+
+    .dbtn:active {
+      background: #ff0000;
+      color: #fff;
+    }
+
+    .empty {
+      visibility: hidden;
+    }
+
+    /* --- STATS --- */
+    #stats {
+      background: #1c1c1c;
+      padding: 12px 16px;
+      border-radius: 10px;
+      font-size: 14px;
+      font-weight: bold;
+      text-align: left;
+      min-width: 160px;
+      line-height: 2.5;
+      height: 200px;
+    }
+  </style>
+</head>
+
+<body>
+<div id="page">
+
+  <img id="camera" src="http://192.168.107.16:8888">
+
+  <div id="bottom">
+
+    <!-- D-PAD -->
+    <div id="dpad">
+      <div class="empty"></div>
+      <button id="forward" class="dbtn">↑</button>
+      <div class="empty"></div>
+
+      <button id="left" class="dbtn">←</button>
+      <button id="stop" class="dbtn">■</button>
+      <button id="right" class="dbtn">→</button>
+
+      <div class="empty"></div>
+      <button id="backward" class="dbtn">↓</button>
+      <div class="empty"></div>
+    </div>
+
+    <!-- STATS -->
+    <div id="stats">
+      CPU: <span id="cpu">--</span>%<br>
+      RAM: <span id="ram">--</span>%<br>
+      Temp: <span id="temp">--</span> °C<br>
+      Uptime: <span id="uptime">--</span><br>
+      Leo age: <span id="age">--</span>
+    </div>
+
+  </div>
+</div>
+
+<script src="/socket.io/socket.io.js"></script>
+<script>
+  const socket = io();
+  const $ = id => document.getElementById(id);
+
+  /* -------- HOLD TO MOVE (pointer-safe) -------- */
+
+  function bindHold(id, cmd) {
+    const b = $(id);
+
+    const start = e => {
+      e.preventDefault();
+      socket.emit('move', cmd);
+    };
+
+    const stop = e => {
+      e.preventDefault();
+      socket.emit('stopAll');
+    };
+
+    b.addEventListener('pointerdown', start);
+    b.addEventListener('pointerup', stop);
+    b.addEventListener('pointerleave', stop);
+    b.addEventListener('pointercancel', stop);
+  }
+
+  bindHold('forward', 'forward');
+  bindHold('backward', 'backward');
+  bindHold('left', 'left');
+  bindHold('right', 'right');
+
+  $('stop').addEventListener('click', () => socket.emit('stopAll'));
+
+  /* -------- STATS -------- */
+
+  function formatDuration(seconds) {
+    seconds = Math.floor(seconds);
+    const d = Math.floor(seconds / 86400);
+    const h = Math.floor((seconds % 86400) / 3600);
+    const m = Math.floor((seconds % 3600) / 60);
+    return `${d}d ${h}h ${m}m`;
+  }
+
+  function update(id, value) {
+    const el = $(id);
+    if (el.textContent !== value) el.textContent = value;
+  }
+
+  socket.on('stats', s => {
+    update('cpu', s.cpu);
+    update('ram', s.ram);
+    update('temp', s.temp ?? '--');
+    update('uptime', formatDuration(s.uptime));
+    update('age', formatDuration(s.age));
+  });
+</script>
+</body>
+</html>
