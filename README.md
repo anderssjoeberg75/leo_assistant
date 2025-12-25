@@ -9,7 +9,6 @@ Updates sources and upgrade Raspberry Pi and removes no needed packages
 sudo apt update && sudo apt upgrade -y -f && sudo apt autoremove -y 
 ```
 ```
-sudo apt update
 sudo apt install git build-essential rpicam-apps libcamera-apps python3-setuptools curl -y -f
 ```
 Clone pigpio source and install it
