@@ -53,4 +53,10 @@ sudo reboot
 ``` 
 ``` 
 node -v && npm -v
+```
+Install all npm stuff needed 
+```
+cd /opt/jarvis
+sudo npm install
+sudo npm install pigpio-client
 ``` 
