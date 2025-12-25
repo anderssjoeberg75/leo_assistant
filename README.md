@@ -53,7 +53,7 @@ Prepare folders and get the code
 
 Clone the repositopry
 ``` 
-sudo git clone https://github.com/anderssjoeberg75/leo_assistant.git /tmp/opt/
+sudo git clone https://github.com/anderssjoeberg75/leo_assistant.git /opt/
 ``` 
 Set correct owner of the folder
 ```
