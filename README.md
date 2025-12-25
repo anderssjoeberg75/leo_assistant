@@ -50,22 +50,18 @@ sudo usermod -aG gpio $USER
 ```
 
 Prepare folders and get the code
-
-Clone the repositopry
 ``` 
-sudo git clone https://github.com/anderssjoeberg75/leo_assistant.git /opt/
+sudo mkdir -p /opt/jarvis/
+sudo chown -R $USER:$USER /opt/jarvis
+
+
+sudo git clone https://github.com/anderssjoeberg75/leo_assistant.git /opt/jarvis/
 ``` 
 Set correct owner of the folder
 ```
 sudo chown $USER:$USER /opt/jarvis
-
 ```
-Clone the repositopry
-``` 
-git clone https://github.com/anderssjoeberg75/leo_assistant.git /opt/
-cd /tmp/opt/
-sudo cp -r * /opt/
-``` 
+
 Install Node.JS v 18.20.8
 
 ``` 
