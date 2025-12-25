@@ -8,9 +8,38 @@ Updates sources and upgrade Raspberry Pi and removes no needed packages
 ``` 
 sudo apt update && sudo apt upgrade y -f && sudo apt autoremove -y 
 ```
-``` 
-sudo apt install -y  rpicam-apps libcamera-apps git -y -f
 ```
+sudo apt update
+sudo apt install git build-essential rpicam-apps libcamera-apps python3-setuptools -y -f
+```
+Clone pigpio source and install it
+```
+cd /tmp
+git clone https://github.com/joan2937/pigpio.git
+cd pigpio
+make
+sudo make install
+
+```
+
+```
+sudo tee /etc/systemd/system/pigpiod.service > /dev/null << 'EOF'
+[Unit]
+Description=Pigpio daemon
+After=network.target
+Wants=network.target
+
+[Service]
+Type=forking
+ExecStart=/usr/local/bin/pigpiod
+ExecStop=/usr/bin/killall pigpiod
+Restart=on-failure
+
+[Install]
+WantedBy=multi-user.target
+EOF
+```
+
 ```
 sudo usermod -aG gpio $USER
 ```
