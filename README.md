@@ -22,6 +22,7 @@ sudo make install
 
 ```
 
+Make pigpiod to start at boot
 ```
 sudo tee /etc/systemd/system/pigpiod.service > /dev/null << 'EOF'
 [Unit]
@@ -39,7 +40,11 @@ Restart=on-failure
 WantedBy=multi-user.target
 EOF
 ```
-
+```
+sudo systemctl daemon-reload
+sudo systemctl enable pigpiod
+sudo systemctl start pigpiod
+```
 ```
 sudo usermod -aG gpio $USER
 ```
