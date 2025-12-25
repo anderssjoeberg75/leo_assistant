@@ -53,7 +53,7 @@ Prepare folders and get the code
 
 Clone the repositopry
 ``` 
-git clone https://github.com/anderssjoeberg75/leo_assistant.git /opt/
+sudo git clone https://github.com/anderssjoeberg75/leo_assistant.git /tmp/opt/
 ``` 
 Set correct owner of the folder
 ```
@@ -63,6 +63,8 @@ sudo chown $USER:$USER /opt/jarvis
 Clone the repositopry
 ``` 
 git clone https://github.com/anderssjoeberg75/leo_assistant.git /opt/
+cd /tmp/opt/
+sudo cp -r * /opt/
 ``` 
 reboot Raspberry pi
 ``` 
