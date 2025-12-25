@@ -79,3 +79,29 @@ cd /opt/jarvis
 sudo npm install
 sudo npm install pigpio-client
 ``` 
+Make camera start streaming at boot
+``` 
+sudo tee /etc/systemd/system/leo-camera.service > /dev/null << 'EOF'
+[Unit]
+Description=Leo MJPEG Camera Stream
+After=network.target
+Wants=network.target
+
+[Service]
+Type=simple
+User=netadmin
+WorkingDirectory=/opt/jarvis
+ExecStart=/usr/bin/node /opt/jarvis/camera_stream.js
+Restart=always
+RestartSec=2
+Environment=NODE_ENV=production
+
+[Install]
+WantedBy=multi-user.target
+EOF
+```
+```
+sudo systemctl daemon-reload
+sudo systemctl enable leo-camera
+sudo systemctl start leo-camera
+```
