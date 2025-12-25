@@ -31,7 +31,7 @@ Wants=network.target
 
 [Service]
 Type=forking
-ExecStart=/usr/local/bin/pigpiod
+ExecStart=/usr/local/bin/pigpiod -p 8887
 ExecStop=/usr/bin/killall pigpiod
 Restart=on-failure
 
