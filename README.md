@@ -69,14 +69,11 @@ sudo cp -r * /opt/
 Install Node.JS v 18.20.8
 
 ``` 
-cd /tmp
-wget https://unofficial-builds.nodejs.org/download/release/v18.20.8/node-v18.20.8-linux-armv6l.tar.xz
-sudo cp -R node-v18.20.8-linux-armv6l/* /usr/local/
+curl -sL https://deb.nodesource.com/setup_18.x | sudo -E bash -
+sudo apt update -y
+sudo apt install -y nodejs  
 ```
-reboot Raspberry pi
-``` 
-sudo reboot
-``` 
+Verify installation
 ``` 
 node -v && npm -v
 ```
