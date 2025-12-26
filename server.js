@@ -12,6 +12,8 @@ const io = new Server(server);
 
 app.use(express.static('public'));
 
+const CAMERA_URL = 'http://127.0.0.1:8888';
+
 const STATS_INTERVAL_MS = 2000;
 const LEO_BIRTH = new Date('2025-12-22T11:00:00');
 
@@ -48,28 +50,36 @@ function getTemperature() {
   }
 }
 
+/* ---------- CAMERA CALL ---------- */
+function camCall(path) {
+  http.get(CAMERA_URL + path).on('error', () => {});
+}
+
 /* ---------- SOCKET.IO ---------- */
 io.on('connection', socket => {
 
   socket.on('move', dir => {
-    if (typeof motor[dir] !== 'function') return;
-    motor[dir]();
+    if (typeof motor[dir] === 'function') motor[dir]();
   });
 
-  socket.on('stopAll', () => {
-    motor.stopAll();
+  socket.on('stopAll', () => motor.stopAll());
+
+  socket.on('snapshot', () => camCall('/snapshot'));
+
+  socket.on('rec_start', () => {
+    camCall('/rec/start');
+    socket.emit('rec_state', true);
   });
 
-  socket.on('disconnect', () => {
-    motor.stopAll(); // safety
+  socket.on('rec_stop', () => {
+    camCall('/rec/stop');
+    socket.emit('rec_state', false);
   });
 
   const statsInterval = setInterval(() => {
     socket.emit('stats', {
       cpu: getCpuUsagePercent(),
-      ram: Math.round(
-          ((os.totalmem() - os.freemem()) / os.totalmem()) * 100
-      ),
+      ram: Math.round(((os.totalmem() - os.freemem()) / os.totalmem()) * 100),
       temp: getTemperature(),
       uptime: Math.floor(os.uptime()),
       age: Math.floor((Date.now() - LEO_BIRTH) / 1000)
@@ -77,11 +87,11 @@ io.on('connection', socket => {
   }, STATS_INTERVAL_MS);
 
   socket.on('disconnect', () => {
+    motor.stopAll();
     clearInterval(statsInterval);
   });
 });
 
-/* ---------- START ---------- */
 server.listen(3000, () => {
   console.log('Leo server listening on port 3000');
 });

@@ -6,7 +6,8 @@
   "type": "commonjs",
   "dependencies": {
     "express": "^4.19.2",
-    "socket.io": "^4.7.5",
-    "pigpio": "^3.3.1"
+    "pigpio": "^3.3.1",
+    "pigpio-client": "^1.5.2",
+    "socket.io": "^4.7.5"
   }
 }
