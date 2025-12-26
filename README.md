@@ -104,4 +104,5 @@ EOF
 sudo systemctl daemon-reload
 sudo systemctl enable leo-camera
 sudo systemctl start leo-camera
+sudo systemctl status leo-camera
 ```
