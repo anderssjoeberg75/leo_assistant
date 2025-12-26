@@ -106,3 +106,30 @@ sudo systemctl enable leo-camera
 sudo systemctl start leo-camera
 sudo systemctl status leo-camera
 ```
+Make server start streaming at boot
+``` 
+sudo tee /etc/systemd/system/leo-server.service > /dev/null << 'EOF'
+[Unit]
+Description=Leo server
+After=network.target
+Wants=network.target
+
+[Service]
+Type=simple
+User=netadmin
+WorkingDirectory=/opt/jarvis
+ExecStart=/usr/bin/node /opt/jarvis/server.js
+Restart=always
+RestartSec=2
+Environment=NODE_ENV=production
+
+[Install]
+WantedBy=multi-user.target
+EOF
+```
+```
+sudo systemctl daemon-reload
+sudo systemctl enable leo-server
+sudo systemctl start leo-server
+sudo systemctl status leo-server
+```
