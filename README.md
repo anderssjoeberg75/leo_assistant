@@ -1,6 +1,11 @@
 # The Leo assistant
+
+v.1.1 Recording and ability to take snapshots
+
 Components needed
 L298N motor controller
+Raspberry pi3b with wifi or with wifi dongle
+Raspberry pi camera module
 
 Install and update all that is needed
 
