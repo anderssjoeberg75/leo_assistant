@@ -12,14 +12,14 @@ Raspberry pi camera module
 
 Install and update all that is needed
 
-Updates sources and upgrade Raspberry Pi and removes no needed packages
+## **Updates sources and upgrade Raspberry Pi and removes no needed packages**
 ``` 
 sudo apt update && sudo apt upgrade -y -f && sudo apt autoremove -y 
 ```
 ```
 sudo apt install git build-essential rpicam-apps libcamera-apps python3-setuptools curl ffmpeg -y -f
 ```
-Clone pigpio source and install it
+### Clone pigpio source and install it
 ```
 cd /tmp
 git clone https://github.com/joan2937/pigpio.git
@@ -29,7 +29,7 @@ sudo make install
 
 ```
 
-Make pigpiod to start at boot
+### Make pigpiod to start at boot
 ```
 sudo tee /etc/systemd/system/pigpiod.service > /dev/null << 'EOF'
 [Unit]
@@ -57,7 +57,7 @@ sudo systemctl status pigpiod
 sudo usermod -aG gpio $USER
 ```
 
-Prepare folders and get the code
+### Prepare folders and get the code
 ``` 
 sudo mkdir -p /opt/jarvis/
 sudo chown -R $USER:$USER /opt/jarvis
@@ -65,29 +65,31 @@ sudo chown -R $USER:$USER /opt/jarvis
 
 sudo git clone https://github.com/anderssjoeberg75/leo_assistant.git /opt/jarvis/
 ``` 
-Set correct owner of the folder
+### Set correct owner of the folder
+I know chmod -R 777 gives all privileges but this is just under development
 ```
 sudo chown $USER:$USER /opt/jarvis
+sudo chmod -R 777 /opt/script/jarvis
 ```
 
-Install Node.JS v 18.20.8
+### Install Node.JS v 18.20.8
 
 ``` 
 curl -sL https://deb.nodesource.com/setup_18.x | sudo -E bash -
 sudo apt update -y
 sudo apt install -y nodejs  
 ```
-Verify installation
+### Verify installation
 ``` 
 node -v && npm -v
 ```
-Install all npm stuff needed 
+### Install all npm stuff needed
 ```
 cd /opt/jarvis
 sudo npm install
 sudo npm install pigpio-client
 ``` 
-Make camera start streaming at boot
+### Make camera start streaming at boot
 ``` 
 sudo tee /etc/systemd/system/leo-camera.service > /dev/null << 'EOF'
 [Unit]
@@ -114,7 +116,7 @@ sudo systemctl enable leo-camera
 sudo systemctl start leo-camera
 sudo systemctl status leo-camera
 ```
-Make server start streaming at boot
+### Make server start at boot
 ``` 
 sudo tee /etc/systemd/system/leo-server.service > /dev/null << 'EOF'
 [Unit]
