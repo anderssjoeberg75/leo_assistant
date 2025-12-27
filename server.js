@@ -1,3 +1,9 @@
+/*
+  server.js
+  ---------
+  Main control server.
+*/
+
 const express = require('express');
 const http = require('http');
 const { Server } = require('socket.io');
@@ -5,6 +11,12 @@ const os = require('os');
 const fs = require('fs');
 
 const motor = require('./motor');
+const ai = require('./ai');
+const sensors = require('./sensors'); // <-- RENAMED
+
+/* ============================================================
+   SERVER SETUP
+   ============================================================ */
 
 const app = express();
 const server = http.createServer(app);
@@ -14,13 +26,20 @@ app.use(express.static('public'));
 
 const CAMERA_URL = 'http://127.0.0.1:8888';
 
+/* ============================================================
+   SYSTEM CONSTANTS
+   ============================================================ */
+
 const STATS_INTERVAL_MS = 2000;
 const LEO_BIRTH = new Date('2025-12-22T11:00:00');
 
 let lastIdle = 0;
 let lastTotal = 0;
 
-/* ---------- CPU ---------- */
+/* ============================================================
+   SYSTEM METRICS
+   ============================================================ */
+
 function getCpuUsagePercent() {
   const cpus = os.cpus();
   let idle = 0, total = 0;
@@ -39,7 +58,6 @@ function getCpuUsagePercent() {
   return Math.round(100 - (idleDiff / totalDiff) * 100);
 }
 
-/* ---------- TEMP ---------- */
 function getTemperature() {
   try {
     return Math.round(
@@ -50,12 +68,18 @@ function getTemperature() {
   }
 }
 
-/* ---------- CAMERA CALL ---------- */
+/* ============================================================
+   CAMERA PROXY
+   ============================================================ */
+
 function camCall(path) {
   http.get(CAMERA_URL + path).on('error', () => {});
 }
 
-/* ---------- SOCKET.IO ---------- */
+/* ============================================================
+   SOCKET.IO EVENTS
+   ============================================================ */
+
 io.on('connection', socket => {
 
   socket.on('move', dir => {
@@ -76,6 +100,15 @@ io.on('connection', socket => {
     socket.emit('rec_state', false);
   });
 
+  socket.on('ai_prompt', async prompt => {
+    try {
+      const reply = await ai.ask(prompt);
+      socket.emit('ai_reply', reply);
+    } catch {
+      socket.emit('ai_reply', 'AI error');
+    }
+  });
+
   const statsInterval = setInterval(() => {
     socket.emit('stats', {
       cpu: getCpuUsagePercent(),
@@ -92,6 +125,37 @@ io.on('connection', socket => {
   });
 });
 
+/* ============================================================
+   START SERVER
+   ============================================================ */
+
 server.listen(3000, () => {
   console.log('Leo server listening on port 3000');
 });
+
+/* ============================================================
+   SENSOR SYSTEM INIT
+   ============================================================ */
+
+sensors.init(motor);
+
+/* ============================================================
+   GRACEFUL SHUTDOWN
+   ============================================================ */
+
+function shutdown() {
+  console.log('Leo server shutting down');
+
+  try {
+    motor.stopAll();
+  } catch {}
+
+  io.close(() => {
+    server.close(() => process.exit(0));
+  });
+
+  setTimeout(() => process.exit(1), 3000);
+}
+
+process.on('SIGTERM', shutdown);
+process.on('SIGINT', shutdown);

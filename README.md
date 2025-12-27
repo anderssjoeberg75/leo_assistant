@@ -1,16 +1,21 @@
 # The Leo assistant
 
-v.1.1 Recording and ability to take snapshots
+251226 Recording and ability to take snapshots
 
-Components needed
+251217 AI support and faster restarts
 
+
+### Components needed
+```
 L298N motor controller
 
 Raspberry pi3b with wifi or with wifi dongle
 
 Raspberry pi camera module
 
-Install and update all that is needed
+
+```
+
 
 ## **Updates sources and upgrade Raspberry Pi and removes no needed packages**
 ``` 
@@ -106,6 +111,9 @@ Restart=always
 RestartSec=2
 Environment=NODE_ENV=production
 
+TimeoutStopSec=5
+KillMode=control-group
+
 [Install]
 WantedBy=multi-user.target
 EOF
@@ -133,6 +141,9 @@ Restart=always
 RestartSec=2
 Environment=NODE_ENV=production
 
+KillMode=control-group
+TimeoutStopSec=5
+
 [Install]
 WantedBy=multi-user.target
 EOF
@@ -142,4 +153,9 @@ sudo systemctl daemon-reload
 sudo systemctl enable leo-server
 sudo systemctl start leo-server
 sudo systemctl status leo-server
+```
+Troubleshooting
+
+```
+journalctl -u leo-server -n 50 --no-pager
 ```
