@@ -13,6 +13,8 @@ Raspberry pi3b with wifi or with wifi dongle
 
 Raspberry pi camera module
 
+Flying Fish IR obstacle avoidance sensors.
+
 
 ```
 
