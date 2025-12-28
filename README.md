@@ -2,7 +2,9 @@
 
 251226 Recording and ability to take snapshots
 
-251217 AI support and faster restarts
+251227 AI support and faster restarts
+
+251228 Minor updates heat issues and added obstacle detection
 
 
 ### Components needed
