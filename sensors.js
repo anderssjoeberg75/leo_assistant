@@ -2,61 +2,101 @@
   sensors.js
   ----------
   Central sensor manager for Leo
-
-  Current responsibilities:
-  - Monitor Flying Fish IR obstacle sensors
-  - Immediately stop motors when any sensor triggers
-
-  Sensors:
-  - FRONT sensor -> GPIO 24
-  - BACK  sensor -> GPIO 23
-
-  This file is designed to be extended with
-  additional sensors later (ToF, bumpers, etc).
+  Code-only mitigation against false obstacle triggers
+  using LOW-level time qualification.
 */
 
 const pigpio = require('pigpio-client');
 
 const pi = pigpio.pigpio({
-    host: '127.0.0.1',
-    port: 8887
+  host: '127.0.0.1',
+  port: 8887
 });
 
 let motor = null;
+let io = null;
+let onObstacle = null;
+
+/* ============================================================
+   CONFIGURATION (CODE-ONLY MITIGATION)
+   ============================================================ */
+
+// Minimum time (ms) the signal must stay LOW
+// to be considered a real obstacle
+const LOW_CONFIRM_MS = 5;
 
 /* ============================================================
    INITIALIZATION
    ============================================================ */
 
-function init(motorModule) {
-    motor = motorModule;
+function init(motorModule, ioInstance, obstacleCallback) {
+  motor = motorModule;
+  io = ioInstance;
+  onObstacle = obstacleCallback;
 
-    pi.on('connected', () => {
-        console.log('Sensors subsystem connected');
-
-        setupObstacleSensor('FRONT', 24);
-        setupObstacleSensor('BACK', 23);
-    });
+  pi.on('connected', () => {
+    console.log('Sensors subsystem connected');
+    setupObstacleSensor('front', 24);
+    setupObstacleSensor('back', 23);
+  });
 }
 
 /* ============================================================
-   OBSTACLE SENSOR SETUP
+   OBSTACLE SENSOR SETUP (FILTERED)
    ============================================================ */
 
-function setupObstacleSensor(label, gpio) {
-    const sensor = pi.gpio(gpio);
+function setupObstacleSensor(position, gpio) {
+  const sensor = pi.gpio(gpio);
 
-    sensor.modeSet('input');
+  sensor.modeSet('input');
 
-    // Flying Fish sensors are push-pull
-    sensor.pullUpDown(0);
+  // LM393 output is open-collector (active LOW)
+  sensor.pullUpDown(2); // PUD_UP
 
-    sensor.notify((level) => {
-        if (level === 0) {
-            console.log(`[${label} SENSOR] OBSTACLE DETECTED → STOP MOTORS`);
+  let lastLevel = 1;
+  let confirmTimer = null;
+  let confirmed = false;
+
+  sensor.notify(level => {
+
+    /* HIGH -> LOW edge detected */
+    if (lastLevel === 1 && level === 0) {
+
+      // Start LOW qualification timer
+      confirmTimer = setTimeout(() => {
+
+        // Re-read GPIO level after delay
+        sensor.read((err, currentLevel) => {
+          if (err) return;
+
+          // Confirmed LOW = real obstacle
+          if (currentLevel === 0 && !confirmed) {
+            confirmed = true;
+
+            console.log(
+              `[${position.toUpperCase()} SENSOR] OBSTACLE CONFIRMED`
+            );
+
             if (motor) motor.stopAll();
-        }
-    });
+            if (onObstacle) onObstacle(position);
+            if (io) io.emit('obstacle', { position });
+          }
+        });
+
+      }, LOW_CONFIRM_MS);
+    }
+
+    /* LOW -> HIGH : reset state */
+    if (lastLevel === 0 && level === 1) {
+      confirmed = false;
+      if (confirmTimer) {
+        clearTimeout(confirmTimer);
+        confirmTimer = null;
+      }
+    }
+
+    lastLevel = level;
+  });
 }
 
 /* ============================================================
@@ -64,5 +104,5 @@ function setupObstacleSensor(label, gpio) {
    ============================================================ */
 
 module.exports = {
-    init
+  init
 };

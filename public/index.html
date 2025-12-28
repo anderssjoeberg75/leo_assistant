@@ -122,6 +122,20 @@
       line-height: 2.5;
       height: 200px;
     }
+
+    /* --- OBSTACLE ALERT (NO BACKGROUND) --- */
+    #obstacle-alert {
+      position: absolute;
+      bottom: 12px;
+      left: 50%;
+      transform: translateX(-50%);
+      color: red;
+      font-size: 18px;
+      font-weight: bold;
+      display: none;
+      pointer-events: none;
+      text-shadow: 0 0 6px rgba(0,0,0,0.8);
+    }
   </style>
 </head>
 
@@ -131,6 +145,7 @@
   <div style="position: relative;">
     <div id="rec-indicator">REC <span id="rec-time">00:00</span></div>
     <img id="camera" src="http://192.168.107.16:8888">
+    <div id="obstacle-alert"></div>
   </div>
 
   <div id="controls">
@@ -173,8 +188,8 @@
   let recording = false;
   let recTimer = null;
   let recStart = null;
+  let obstacleTimer = null;
 
-  /* ---------- MOTOR ---------- */
   function bindHold(id, cmd) {
     const b = $(id);
 
@@ -201,7 +216,6 @@
 
   $('stop').addEventListener('click', () => socket.emit('stopAll'));
 
-  /* ---------- SNAPSHOT ---------- */
   $('snapshot').addEventListener('click', () => {
     socket.emit('snapshot');
     const f = $('flash');
@@ -209,13 +223,9 @@
     setTimeout(() => f.style.opacity = 0, 120);
   });
 
-  /* ---------- RECORD BUTTON ---------- */
   $('record').addEventListener('click', () => {
-    if (!recording) {
-      socket.emit('rec_start');
-    } else {
-      socket.emit('rec_stop');
-    }
+    if (!recording) socket.emit('rec_start');
+    else socket.emit('rec_stop');
   });
 
   function formatTime(sec) {
@@ -224,10 +234,8 @@
     return `${m}:${s}`;
   }
 
-  /* ---------- RECORD STATE ---------- */
   socket.on('rec_state', state => {
     recording = state;
-
     const btn = $('record');
     const indicator = $('rec-indicator');
 
@@ -236,23 +244,38 @@
     if (state) {
       btn.textContent = 'Stop';
       btn.classList.add('recording');
-
       recStart = Date.now();
       recTimer = setInterval(() => {
         const t = Math.floor((Date.now() - recStart) / 1000);
         $('rec-time').textContent = formatTime(t);
       }, 1000);
-
     } else {
       btn.textContent = 'Record';
       btn.classList.remove('recording');
-
       clearInterval(recTimer);
       $('rec-time').textContent = '00:00';
     }
   });
 
-  /* ---------- STATS ---------- */
+  socket.on('obstacle', data => {
+    const alert = $('obstacle-alert');
+
+    if (data.position === 'front') {
+      alert.textContent = 'Obstacle front detected';
+    } else if (data.position === 'back') {
+      alert.textContent = 'Obstacle back detected';
+    } else {
+      return;
+    }
+
+    alert.style.display = 'block';
+
+    clearTimeout(obstacleTimer);
+    obstacleTimer = setTimeout(() => {
+      alert.style.display = 'none';
+    }, 3000);
+  });
+
   function formatDuration(seconds) {
     const d = Math.floor(seconds / 86400);
     const h = Math.floor((seconds % 86400) / 3600);

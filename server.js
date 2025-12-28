@@ -12,7 +12,7 @@ const fs = require('fs');
 
 const motor = require('./motor');
 const ai = require('./ai');
-const sensors = require('./sensors'); // <-- RENAMED
+const sensors = require('./sensors');
 
 /* ============================================================
    SERVER SETUP
@@ -35,6 +35,22 @@ const LEO_BIRTH = new Date('2025-12-22T11:00:00');
 
 let lastIdle = 0;
 let lastTotal = 0;
+
+/* ============================================================
+   OBSTACLE STATE (TRANSIENT)
+   ============================================================ */
+
+let frontBlocked = false;
+let backBlocked = false;
+
+/* ============================================================
+   SENSOR CALLBACK
+   ============================================================ */
+
+function handleObstacle(position) {
+  if (position === 'front') frontBlocked = true;
+  if (position === 'back') backBlocked = true;
+}
 
 /* ============================================================
    SYSTEM METRICS
@@ -61,7 +77,7 @@ function getCpuUsagePercent() {
 function getTemperature() {
   try {
     return Math.round(
-        parseInt(fs.readFileSync('/sys/class/thermal/thermal_zone0/temp')) / 1000
+      parseInt(fs.readFileSync('/sys/class/thermal/thermal_zone0/temp')) / 1000
     );
   } catch {
     return null;
@@ -83,10 +99,29 @@ function camCall(path) {
 io.on('connection', socket => {
 
   socket.on('move', dir => {
-    if (typeof motor[dir] === 'function') motor[dir]();
+
+    // Direction-aware blocking
+    if (dir === 'forward' && frontBlocked) return;
+    if (dir === 'backward' && backBlocked) return;
+
+    // ✅ CLEAR BLOCKS WHEN ESCAPING
+    if (dir === 'backward') frontBlocked = false;
+    if (dir === 'forward') backBlocked = false;
+    if (dir === 'left' || dir === 'right') {
+      frontBlocked = false;
+      backBlocked = false;
+    }
+
+    if (typeof motor[dir] === 'function') {
+      motor[dir]();
+    }
   });
 
-  socket.on('stopAll', () => motor.stopAll());
+  socket.on('stopAll', () => {
+    motor.stopAll();
+    frontBlocked = false;
+    backBlocked = false;
+  });
 
   socket.on('snapshot', () => camCall('/snapshot'));
 
@@ -121,9 +156,17 @@ io.on('connection', socket => {
 
   socket.on('disconnect', () => {
     motor.stopAll();
+    frontBlocked = false;
+    backBlocked = false;
     clearInterval(statsInterval);
   });
 });
+
+/* ============================================================
+   SENSOR INIT
+   ============================================================ */
+
+sensors.init(motor, io, handleObstacle);
 
 /* ============================================================
    START SERVER
@@ -132,12 +175,6 @@ io.on('connection', socket => {
 server.listen(3000, () => {
   console.log('Leo server listening on port 3000');
 });
-
-/* ============================================================
-   SENSOR SYSTEM INIT
-   ============================================================ */
-
-sensors.init(motor);
 
 /* ============================================================
    GRACEFUL SHUTDOWN
