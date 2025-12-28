@@ -1,14 +1,16 @@
 /*
-  motor.js
-  --------
-  L298N motor and light controller.
-  Provides full-speed directional control using pigpio-client.
+  FILE: motor.js
+  PURPOSE:
+  L298N motor and light controller for Leo.
+  This version uses ENA / ENB as simple ON/OFF enables (no PWM).
+  Motors always run at full speed when enabled.
 */
 
 const pigpio = require('pigpio-client');
 
 /* ============================================================
    PIGPIO CONNECTION
+   - Connects to pigpiod daemon
    ============================================================ */
 
 const pi = pigpio.pigpio({
@@ -16,71 +18,91 @@ const pi = pigpio.pigpio({
   port: 8887
 });
 
-let IN1, IN2, IN3, IN4, ENA, ENB, LIGHT;
+/* ============================================================
+   GPIO DECLARATIONS
+   ============================================================ */
+
+let IN1, IN2, IN3, IN4;   // Direction pins
+let ENA, ENB;             // Motor enable pins (NO PWM)
+let LIGHT;                // Auxiliary light output
 let ready = false;
 
 /* ============================================================
-   GPIO INITIALIZATION
+   INITIALIZATION
+   - Runs once pigpio connects
+   - Sets GPIO modes
+   - Enables motors
    ============================================================ */
 
 pi.on('connected', () => {
+  // Direction pins (L298N IN1–IN4)
   IN1 = pi.gpio(5);
   IN2 = pi.gpio(12);
   IN3 = pi.gpio(16);
   IN4 = pi.gpio(20);
 
+  // Enable pins (L298N ENA / ENB)
   ENA = pi.gpio(18);
   ENB = pi.gpio(13);
 
+  // Optional light output
   LIGHT = pi.gpio(27);
 
+  // Configure all pins as outputs
   [IN1, IN2, IN3, IN4, ENA, ENB, LIGHT].forEach(p =>
       p.modeSet('output')
   );
 
+  // Enable motors permanently (full speed, no PWM)
+  ENA.write(1);
+  ENB.write(1);
+
+  // Ensure motors are stopped on startup
   stopAll();
   lightOff();
 
   ready = true;
-  console.log('pigpio connected, full-speed mode ready');
+  console.log('Motor controller ready (ENA/ENB enabled, no PWM)');
 });
 
 /* ============================================================
-   MOTOR COMMANDS
+   MOTOR CONTROL FUNCTIONS
+   - Direction only
+   - Full speed operation
    ============================================================ */
 
 function stopAll() {
   if (!ready) return;
 
+  // Brake both motors
   IN1.write(0); IN2.write(0);
   IN3.write(0); IN4.write(0);
-  ENA.write(0); ENB.write(0);
 }
 
 function forward() {
   if (!ready) return;
-  ENA.write(1); ENB.write(1);
+
   IN1.write(1); IN2.write(0);
   IN3.write(1); IN4.write(0);
 }
 
 function backward() {
   if (!ready) return;
-  ENA.write(1); ENB.write(1);
+
   IN1.write(0); IN2.write(1);
   IN3.write(0); IN4.write(1);
 }
 
 function left() {
   if (!ready) return;
-  ENA.write(1); ENB.write(1);
+
   IN1.write(0); IN2.write(1);
   IN3.write(1); IN4.write(0);
 }
 
 function right() {
   if (!ready) return;
-  ENA.write(1); ENB.write(1);
+
   IN1.write(1); IN2.write(0);
   IN3.write(0); IN4.write(1);
 }
@@ -98,7 +120,8 @@ function lightOff() {
 }
 
 /* ============================================================
-   SAFETY SHUTDOWN
+   SAFETY HANDLERS
+   - Ensure motors stop on exit
    ============================================================ */
 
 process.on('SIGINT', () => {

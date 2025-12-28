@@ -79,10 +79,10 @@ sudo chown $USER:$USER /opt/jarvis
 sudo chmod -R 777 /opt/script/jarvis
 ```
 
-### Install Node.JS v 20 LTs
+### Install Node.JS v 18.20.8
 
 ``` 
-curl -fsSL https://deb.nodesource.com/setup_20.x | sudo -E bash -
+curl -sL https://deb.nodesource.com/setup_18.x | sudo -E bash -
 sudo apt update -y
 sudo apt install -y nodejs  
 ```

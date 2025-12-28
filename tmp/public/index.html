@@ -1,0 +1,238 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Leo the assistant</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+
+  <style>
+    body {
+      margin: 0;
+      background: #0b0b0b;
+      color: #fff;
+      font-family: Arial, sans-serif;
+      text-align: center;
+    }
+
+    #page {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+    }
+
+    #camera-wrapper {
+      position: relative;
+      display: inline-block;
+    }
+
+    #camera {
+      max-width: 100%;
+      height: auto;
+      display: block;
+    }
+
+    #fps {
+      position: absolute;
+      top: 8px;
+      left: 8px;
+      background: rgba(0,0,0,0.6);
+      padding: 4px 8px;
+      border-radius: 6px;
+      font-size: 13px;
+      font-weight: bold;
+    }
+
+    #distance {
+      position: absolute;
+      bottom: 8px;
+      left: 50%;
+      transform: translateX(-50%);
+      background: rgba(0,0,0,0.6);
+      padding: 4px 12px;
+      border-radius: 6px;
+      font-size: 13px;
+      font-weight: bold;
+    }
+
+    #rec-indicator {
+      position: absolute;
+      top: 8px;
+      right: 8px;
+      color: red;
+      font-weight: bold;
+      font-size: 16px;
+      display: none;
+    }
+
+    #camera-controls {
+      margin-top: 8px;
+      display: flex;
+      gap: 12px;
+      justify-content: center;
+    }
+
+    .cam-btn {
+      padding: 8px 14px;
+      font-size: 14px;
+      font-weight: bold;
+      border-radius: 10px;
+      border: none;
+      cursor: pointer;
+      background: #bdb6b6;
+      color: #000;
+    }
+
+    .cam-btn.recording {
+      background: #ff0000;
+      color: #fff;
+    }
+
+    #bottom {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      margin-top: 25px;
+      gap: 30px;
+    }
+
+    #dpad {
+      display: grid;
+      grid-template-columns: 70px 70px 70px;
+      grid-template-rows: 70px 70px 70px;
+      gap: 12px;
+    }
+
+    .dbtn {
+      background: #bdb6b6;
+      border: none;
+      border-radius: 12px;
+      color: #000;
+      font-size: 24px;
+      font-weight: bold;
+      cursor: pointer;
+      user-select: none;
+    }
+
+    .dbtn:active {
+      background: #ff0000;
+      color: #fff;
+    }
+
+    .empty {
+      visibility: hidden;
+    }
+
+    #stats {
+      background: #1c1c1c;
+      padding: 12px 16px;
+      border-radius: 10px;
+      font-size: 14px;
+      font-weight: bold;
+      text-align: left;
+      min-width: 180px;
+      line-height: 2.3;
+      height: 220px;
+    }
+  </style>
+</head>
+
+<body>
+<div id="page">
+
+  <div id="camera-wrapper">
+    <div id="fps">FPS: --</div>
+    <div id="rec-indicator">REC</div>
+    <div id="distance">DIST: --</div>
+    <img id="camera" src="http://192.168.107.16:8888">
+  </div>
+
+  <div id="camera-controls">
+    <button id="snapshot" class="cam-btn">📸 Snapshot</button>
+    <button id="record" class="cam-btn">⏺ Record</button>
+  </div>
+
+  <div id="bottom">
+
+    <div id="dpad">
+      <div class="empty"></div>
+      <button id="forward" class="dbtn">↑</button>
+      <div class="empty"></div>
+
+      <button id="left" class="dbtn">←</button>
+      <button id="stop" class="dbtn">■</button>
+      <button id="right" class="dbtn">→</button>
+
+      <div class="empty"></div>
+      <button id="backward" class="dbtn">↓</button>
+      <div class="empty"></div>
+    </div>
+
+    <div id="stats">
+      CPU: <span id="cpu">--</span>%<br>
+      RAM: <span id="ram">--</span>%<br>
+      Temp: <span id="temp">--</span> °C<br>
+      Wi-Fi: <span id="wifi">--</span><br>
+      Uptime: <span id="uptime">--</span><br>
+      Leo age: <span id="age">--</span>
+    </div>
+
+  </div>
+</div>
+
+<script src="/socket.io/socket.io.js"></script>
+<script>
+  const socket = io();
+  const $ = id => document.getElementById(id);
+
+  function bindHold(id, cmd) {
+    const b = $(id);
+    const start = e => { e.preventDefault(); socket.emit('move', cmd); };
+    const stop = e => { e.preventDefault(); socket.emit('stopAll'); };
+
+    b.addEventListener('pointerdown', start);
+    b.addEventListener('pointerup', stop);
+    b.addEventListener('pointerleave', stop);
+    b.addEventListener('pointercancel', stop);
+  }
+
+  bindHold('forward', 'forward');
+  bindHold('backward', 'backward');
+  bindHold('left', 'left');
+  bindHold('right', 'right');
+  $('stop').onclick = () => socket.emit('stopAll');
+
+  $('snapshot').onclick = () => socket.emit('snapshot');
+
+  let rec = false;
+  $('record').onclick = e => {
+    rec = !rec;
+    socket.emit(rec ? 'record:start' : 'record:stop');
+    e.target.classList.toggle('recording', rec);
+    e.target.textContent = rec ? '⏹ Stop' : '⏺ Record';
+  };
+
+  function formatDuration(s) {
+    s = Math.floor(s);
+    return `${Math.floor(s/86400)}d ${Math.floor(s%86400/3600)}h ${Math.floor(s%3600/60)}m`;
+  }
+
+  socket.on('stats', s => {
+    $('cpu').textContent = s.cpu;
+    $('ram').textContent = s.ram;
+    $('temp').textContent = s.temp ?? '--';
+    $('wifi').textContent = s.wifi ? `${s.wifi.quality}%` : '--';
+    $('uptime').textContent = formatDuration(s.uptime);
+    $('age').textContent = formatDuration(s.age);
+    $('fps').textContent = `FPS: ${s.fps}`;
+
+    // ✅ FIXED DISTANCE HANDLING
+    $('distance').textContent =
+            (typeof s.distance === 'number' && !isNaN(s.distance))
+                    ? `DIST: ${s.distance} cm`
+                    : 'DIST: --';
+
+    $('rec-indicator').style.display = s.recording ? 'block' : 'none';
+  });
+</script>
+</body>
+</html>

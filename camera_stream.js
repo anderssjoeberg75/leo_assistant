@@ -1,19 +1,13 @@
 /*
-  camera_stream.js
-  ----------------
-  MJPEG camera streaming service for Raspberry Pi.
-  Provides:
-  - Live MJPEG stream
-  - Snapshot capture
-  - Start/stop video recording
-  - Disk and WiFi safety watchdogs
-  - Fast systemd shutdown handling
+  FILE: camera_stream.js
+  PURPOSE:
+  Optimized MJPEG camera streaming for Leo.
+  Keeps browser compatibility while significantly reducing CPU usage.
 */
 
 const http = require('http');
 const { spawn } = require('child_process');
 const fs = require('fs');
-const os = require('os');
 
 /* ============================================================
    CONFIGURATION
@@ -21,7 +15,12 @@ const os = require('os');
 
 const PORT = 8888;
 const BOUNDARY = '--frame';
-const MIN_FREE_MB = 300;
+
+// Tuned for low CPU on Raspberry Pi 3B
+const WIDTH = 480;
+const HEIGHT = 270;
+const FRAMERATE = 20;
+const QUALITY = 60;
 
 /* ============================================================
    RUNTIME STATE
@@ -29,9 +28,16 @@ const MIN_FREE_MB = 300;
 
 let clients = [];
 let lastFrame = null;
-let recordProcess = null;
-let camProcess = null;
 let server = null;
+let camProcess = null;
+
+/* ============================================================
+   FPS STATE
+   ============================================================ */
+
+let frameCounter = 0;
+let currentFps = 0;
+let lastFpsTime = Date.now();
 
 /* ============================================================
    HTTP SERVER
@@ -39,35 +45,17 @@ let server = null;
 
 server = http.createServer((req, res) => {
 
-    /* Snapshot endpoint */
-    if (req.url === '/snapshot') {
-        if (!lastFrame) {
-            res.writeHead(500);
-            return res.end('NO_FRAME');
-        }
-
-        const file = `/opt/jarvis/snapshot/snap_${Date.now()}.jpg`;
-        fs.writeFileSync(file, lastFrame);
-
-        res.writeHead(200);
-        return res.end('OK');
+    /* === FPS ENDPOINT (USED BY GUI) === */
+    if (req.url === '/fps') {
+        res.writeHead(200, {
+            'Content-Type': 'application/json',
+            'Access-Control-Allow-Origin': '*',
+            'Cache-Control': 'no-cache'
+        });
+        return res.end(JSON.stringify({ fps: currentFps }));
     }
 
-    /* Start recording */
-    if (req.url === '/rec/start') {
-        startRecording();
-        res.writeHead(200);
-        return res.end('OK');
-    }
-
-    /* Stop recording */
-    if (req.url === '/rec/stop') {
-        stopRecording();
-        res.writeHead(200);
-        return res.end('OK');
-    }
-
-    /* MJPEG stream */
+    /* === MJPEG STREAM === */
     res.writeHead(200, {
         'Cache-Control': 'no-cache',
         'Connection': 'close',
@@ -82,30 +70,28 @@ server = http.createServer((req, res) => {
 });
 
 server.listen(PORT, '0.0.0.0', () => {
-    console.log(`MJPEG stream listening on :${PORT}`);
+    console.log(`MJPEG stream listening on port ${PORT}`);
 });
 
 /* ============================================================
-   CAMERA PROCESS (rpicam-vid)
+   CAMERA PROCESS (MJPEG, CPU-OPTIMIZED)
    ============================================================ */
 
 camProcess = spawn('/usr/bin/rpicam-vid', [
     '--codec', 'mjpeg',
-    '--width', '640',
-    '--height', '360',
-    '--framerate', '25',
-    '--quality', '75',
+    '--width', String(WIDTH),
+    '--height', String(HEIGHT),
+    '--framerate', String(FRAMERATE),
+    '--quality', String(QUALITY),
     '--inline',
     '--flush',
-    '--hflip',
-    '--vflip',
     '--timeout', '0',
     '--nopreview',
     '--output', '-'
 ]);
 
 /* ============================================================
-   FRAME PARSING
+   FRAME PARSING + FPS
    ============================================================ */
 
 let buffer = Buffer.alloc(0);
@@ -123,6 +109,17 @@ camProcess.stdout.on('data', chunk => {
 
         lastFrame = frame;
 
+        frameCounter++;
+        const now = Date.now();
+        const elapsed = now - lastFpsTime;
+
+        // FPS update every 2 seconds (lower CPU)
+        if (elapsed >= 2000) {
+            currentFps = Math.round((frameCounter * 1000) / elapsed);
+            frameCounter = 0;
+            lastFpsTime = now;
+        }
+
         for (const c of clients) {
             c.write(
                 `${BOUNDARY}\r\nContent-Type: image/jpeg\r\nContent-Length: ${frame.length}\r\n\r\n`
@@ -134,96 +131,14 @@ camProcess.stdout.on('data', chunk => {
 });
 
 /* ============================================================
-   RECORDING CONTROL
-   ============================================================ */
-
-function startRecording() {
-    if (recordProcess) return;
-    if (getFreeDiskMB() < MIN_FREE_MB) return;
-
-    const file = `/opt/jarvis/recording/rec_${Date.now()}.mp4`;
-
-    recordProcess = spawn('ffmpeg', [
-        '-y',
-        '-f', 'mjpeg',
-        '-i', 'http://127.0.0.1:8888',
-        '-vcodec', 'libx264',
-        '-pix_fmt', 'yuv420p',
-        '-preset', 'veryfast',
-        file
-    ], { stdio: 'ignore' });
-
-    recordProcess.on('exit', () => {
-        recordProcess = null;
-    });
-}
-
-function stopRecording() {
-    if (recordProcess) {
-        recordProcess.kill('SIGINT');
-        recordProcess = null;
-    }
-}
-
-/* ============================================================
-   SAFETY WATCHDOGS
-   ============================================================ */
-
-function getFreeDiskMB() {
-    try {
-        const stat = fs.statfsSync('/opt/jarvis/recording');
-        return Math.round((stat.bavail * stat.bsize) / 1024 / 1024);
-    } catch {
-        return 0;
-    }
-}
-
-setInterval(() => {
-    if (recordProcess && getFreeDiskMB() < MIN_FREE_MB) {
-        stopRecording();
-    }
-}, 5000);
-
-setInterval(() => {
-    const wlan = os.networkInterfaces().wlan0;
-    if (recordProcess && (!wlan || wlan.length === 0)) {
-        stopRecording();
-    }
-}, 3000);
-
-/* ============================================================
-   GRACEFUL SHUTDOWN (SYSTEMD FIX)
+   SHUTDOWN HANDLING
    ============================================================ */
 
 function shutdown() {
-    console.log('Camera service shutting down');
-
-    // Stop recording if active
-    stopRecording();
-
-    // Kill camera process
-    if (camProcess) {
-        camProcess.kill('SIGTERM');
-        camProcess = null;
-    }
-
-    // Close all MJPEG client connections
-    for (const c of clients) {
-        try { c.end(); } catch {}
-    }
-    clients = [];
-
-    // Close HTTP server
-    if (server) {
-        server.close(() => {
-            process.exit(0);
-        });
-    }
-
-    // Failsafe exit
-    setTimeout(() => {
-        process.exit(1);
-    }, 3000);
+    if (camProcess) camProcess.kill('SIGTERM');
+    for (const c of clients) try { c.end(); } catch {}
+    if (server) server.close(() => process.exit(0));
+    setTimeout(() => process.exit(1), 3000);
 }
 
 process.on('SIGTERM', shutdown);

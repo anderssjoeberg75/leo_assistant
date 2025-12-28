@@ -1,4 +1,12 @@
 /*
+  FILE: sensors.js
+  PURPOSE:
+  This file is part of the Leo robot system.
+  The code below is unchanged in behavior.
+  Additional comments explain what each section does.
+*/
+
+/*
   sensors.js
   ----------
   Central sensor manager for Leo
