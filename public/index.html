@@ -5,6 +5,9 @@
   <title>Leo the assistant</title>
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
 
+  <!-- ============================================================
+       GLOBAL STYLES
+       ============================================================ -->
   <style>
     body {
       margin: 0;
@@ -25,6 +28,16 @@
       height: auto;
     }
 
+    #fps-counter {
+      position: absolute;
+      top: 12px;
+      left: 12px;
+      color: red;
+      font-size: 16px;
+      pointer-events: none;
+      text-shadow: 0 0 6px rgba(0,0,0,0.8);
+    }
+
     #rec-indicator {
       position: absolute;
       top: 12px;
@@ -35,23 +48,6 @@
       border-radius: 6px;
       font-weight: bold;
       display: none;
-      animation: blink 1s infinite;
-    }
-
-    @keyframes blink {
-      0%, 50%, 100% { opacity: 1; }
-      25%, 75% { opacity: 0.3; }
-    }
-
-    #fps-counter {
-      position: absolute;
-      top: 12px;
-      left: 12px;
-      color: red;
-      font-size: 16px;
-      font-weight: normal;
-      pointer-events: none;
-      text-shadow: 0 0 6px rgba(0,0,0,0.8);
     }
 
     #controls {
@@ -70,14 +66,6 @@
       cursor: pointer;
     }
 
-    .ctrlbtn:active {
-      background: red;
-    }
-
-    .ctrlbtn.recording {
-      background: red !important;
-    }
-
     #bottom {
       display: flex;
       align-items: center;
@@ -86,6 +74,9 @@
       gap: 30px;
     }
 
+    /* ============================================================
+       D-PAD
+       ============================================================ */
     #dpad {
       display: grid;
       grid-template-columns: 70px 70px 70px;
@@ -101,10 +92,11 @@
       font-size: 24px;
       font-weight: bold;
       cursor: pointer;
+      user-select: none;
     }
 
     .dbtn:active {
-      background: #ff0000;
+      background: red;
       color: #fff;
     }
 
@@ -112,16 +104,49 @@
       visibility: hidden;
     }
 
-    #stats {
+    /* ============================================================
+       COMBINED STATS + SPEED PANEL
+       ============================================================ */
+    #status-panel {
       background: #1c1c1c;
-      padding: 12px 16px;
+      padding: 14px 18px;
       border-radius: 10px;
+      display: flex;
+      flex-direction: column;
+      min-width: 220px;
+    }
+
+    /* Stats text (baseline style) */
+    #stats {
       font-size: 14px;
       font-weight: bold;
       text-align: left;
-      min-width: 160px;
       line-height: 2.5;
-      height: 200px;
+    }
+
+    /* ============================================================
+       SPEED SLIDER (MATCHING STATS STYLE)
+       ============================================================ */
+    #speed-control {
+      margin-top: 10px; /* subtle gap from stats */
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+    }
+
+    #speed-label {
+      display: flex;
+      justify-content: space-between;
+      font-size: 14px;   /* same as stats */
+      font-weight: bold; /* same as stats */
+    }
+
+    #speed-value {
+      color: red;
+    }
+
+    #speed {
+      width: 100%;
     }
 
     #obstacle-alert {
@@ -134,7 +159,6 @@
       font-weight: bold;
       display: none;
       pointer-events: none;
-      text-shadow: 0 0 6px rgba(0,0,0,0.8);
     }
   </style>
 </head>
@@ -142,21 +166,30 @@
 <body>
 <div id="page">
 
+  <!-- ============================================================
+       CAMERA VIEW
+       ============================================================ -->
   <div style="position: relative;">
     <div id="fps-counter">FPS: --</div>
-    <div id="rec-indicator">REC <span id="rec-time">00:00</span></div>
-
+    <div id="rec-indicator">REC</div>
     <img id="camera">
-
     <div id="obstacle-alert"></div>
   </div>
 
+  <!-- ============================================================
+       SNAPSHOT / RECORD CONTROLS
+       ============================================================ -->
   <div id="controls">
     <button id="snapshot" class="ctrlbtn">Snapshot</button>
     <button id="record" class="ctrlbtn">Record</button>
   </div>
 
+  <!-- ============================================================
+       MOVEMENT + STATUS
+       ============================================================ -->
   <div id="bottom">
+
+    <!-- D-PAD -->
     <div id="dpad">
       <div class="empty"></div>
       <button id="forward" class="dbtn">↑</button>
@@ -171,12 +204,35 @@
       <div class="empty"></div>
     </div>
 
-    <div id="stats">
-      CPU: <span id="cpu">--</span>%<br>
-      RAM: <span id="ram">--</span>%<br>
-      Temp: <span id="temp">--</span> °C<br>
-      Uptime: <span id="uptime">--</span><br>
-      Leo age: <span id="age">--</span>
+    <!-- ============================================================
+         STATS + SPEED (SINGLE GREY PANEL)
+         ============================================================ -->
+    <div id="status-panel">
+
+      <!-- Stats -->
+      <div id="stats">
+        CPU: <span id="cpu">--</span>%<br>
+        RAM: <span id="ram">--</span>%<br>
+        Temp: <span id="temp">--</span> °C<br>
+        Uptime: <span id="uptime">--</span><br>
+        Leo age: <span id="age">--</span>
+      </div>
+
+      <!-- Speed slider -->
+      <div id="speed-control">
+        <div id="speed-label">
+          <span>Speed</span>
+          <span id="speed-value">50%</span>
+        </div>
+        <input
+                id="speed"
+                type="range"
+                min="0"
+                max="100"
+                value="50"
+        >
+      </div>
+
     </div>
   </div>
 </div>
@@ -185,13 +241,16 @@
 <script>
   const socket = io();
   const $ = id => document.getElementById(id);
-
   const cameraHost = location.hostname;
 
-  /* CAMERA STREAM (UNCHANGED PROTOCOL) */
+  /* ============================================================
+     CAMERA STREAM
+     ============================================================ */
   $('camera').src = `http://${cameraHost}:8888`;
 
-  /* FPS FETCH (UNCHANGED BEHAVIOR) */
+  /* ============================================================
+     FPS FETCH
+     ============================================================ */
   setInterval(async () => {
     try {
       const res = await fetch(`http://${cameraHost}:8888/fps`);
@@ -202,7 +261,44 @@
     }
   }, 1000);
 
-  /* FORMAT DURATION – RESTORED EXACTLY */
+  /* ============================================================
+     HOLD-TO-MOVE MOTOR CONTROL
+     ============================================================ */
+  function bindHoldButton(id, direction) {
+    const btn = $(id);
+    const start = () => socket.emit('move', direction);
+    const stop  = () => socket.emit('stopAll');
+
+    btn.addEventListener('mousedown', start);
+    btn.addEventListener('touchstart', start);
+
+    btn.addEventListener('mouseup', stop);
+    btn.addEventListener('mouseleave', stop);
+    btn.addEventListener('touchend', stop);
+    btn.addEventListener('touchcancel', stop);
+  }
+
+  bindHoldButton('forward', 'forward');
+  bindHoldButton('backward', 'backward');
+  bindHoldButton('left', 'left');
+  bindHoldButton('right', 'right');
+
+  $('stop').addEventListener('mousedown', () => socket.emit('stopAll'));
+
+  /* ============================================================
+     SPEED SLIDER (UI ONLY)
+     ============================================================ */
+  const speed = $('speed');
+  const speedValue = $('speed-value');
+
+  speed.addEventListener('input', () => {
+    speedValue.textContent = `${speed.value}%`;
+socket.emit('speed', Number(speed.value));
+  });
+
+  /* ============================================================
+     STATS UPDATE
+     ============================================================ */
   function formatDuration(seconds) {
     const d = Math.floor(seconds / 86400);
     const h = Math.floor((seconds % 86400) / 3600);

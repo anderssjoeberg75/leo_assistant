@@ -1,91 +1,78 @@
 /*
   FILE: server.js
   PURPOSE:
-  This file is part of the Leo robot system.
-  The code below is unchanged in behavior.
-  Additional comments explain what each section does.
+  - Serve GUI
+  - Handle Socket.IO
+  - Control motors with PWM
+  - Emit system stats
 */
 
-/*
-  server.js
-  ---------
-  Main control server.
-*/
-
+const path = require('path');
+const os = require('os');
+const fs = require('fs');
 const express = require('express');
 const http = require('http');
 const { Server } = require('socket.io');
-const os = require('os');
-const fs = require('fs');
-
-const motor = require('./motor');
-const ai = require('./ai');
-const sensors = require('./sensors');
 
 /* ============================================================
-   SERVER SETUP
+   CONSTANTS
+   ============================================================ */
+
+const LEO_BIRTH = new Date('2025-12-22T11:00:00');
+
+/* ============================================================
+   PATHS
+   ============================================================ */
+
+const PROJECT_ROOT = '/opt/jarvis';
+const PUBLIC_DIR   = path.join(PROJECT_ROOT, 'public');
+const INDEX_FILE   = path.join(PUBLIC_DIR, 'index.html');
+
+/* ============================================================
+   SUBSYSTEMS
+   ============================================================ */
+
+const motor   = require('/opt/jarvis/motor.js');
+//const sensors = require('/opt/jarvis/sensors.js');
+
+/* ============================================================
+   EXPRESS + HTTP
    ============================================================ */
 
 const app = express();
 const server = http.createServer(app);
-const io = new Server(server);
+const io = new Server(server, { cors: { origin: "*" } });
 
-app.use(express.static('public'));
+app.use(express.static(PUBLIC_DIR));
 
-const CAMERA_URL = 'http://127.0.0.1:8888';
-
-/* ============================================================
-   SYSTEM CONSTANTS
-   ============================================================ */
-
-const STATS_INTERVAL_MS = 2000;
-const LEO_BIRTH = new Date('2025-12-22T11:00:00');
-
-let lastIdle = 0;
-let lastTotal = 0;
+app.get('/', (req, res) => {
+  res.sendFile(INDEX_FILE);
+});
 
 /* ============================================================
-   OBSTACLE STATE (TRANSIENT)
+   SYSTEM STATS
    ============================================================ */
 
-let frontBlocked = false;
-let backBlocked = false;
+const startTime = Date.now();
 
-/* ============================================================
-   SENSOR CALLBACK
-   ============================================================ */
-
-function handleObstacle(position) {
-  if (position === 'front') frontBlocked = true;
-  if (position === 'back') backBlocked = true;
-}
-
-/* ============================================================
-   SYSTEM METRICS
-   ============================================================ */
-
-function getCpuUsagePercent() {
+function getCpuUsage() {
   const cpus = os.cpus();
   let idle = 0, total = 0;
-
-  for (const cpu of cpus) {
+  cpus.forEach(cpu => {
     for (const t in cpu.times) total += cpu.times[t];
     idle += cpu.times.idle;
-  }
+  });
+  return Math.round(100 - (idle / total) * 100);
+}
 
-  const idleDiff = idle - lastIdle;
-  const totalDiff = total - lastTotal;
-  lastIdle = idle;
-  lastTotal = total;
-
-  if (totalDiff === 0) return 0;
-  return Math.round(100 - (idleDiff / totalDiff) * 100);
+function getRamUsage() {
+  return Math.round(((os.totalmem() - os.freemem()) / os.totalmem()) * 100);
 }
 
 function getTemperature() {
   try {
     return Math.round(
-      parseInt(fs.readFileSync('/sys/class/thermal/thermal_zone0/temp')) / 1000
+        parseInt(fs.readFileSync('/sys/class/thermal/thermal_zone0/temp')) / 1000
     );
   } catch {
     return null;
@@ -93,114 +80,53 @@ function getTemperature() {
 }
 
 /* ============================================================
-   CAMERA PROXY
-   ============================================================ */
-
-function camCall(path) {
-  http.get(CAMERA_URL + path).on('error', () => {});
-}
-
-/* ============================================================
-   SOCKET.IO EVENTS
+   SOCKET.IO HANDLERS
    ============================================================ */
 
 io.on('connection', socket => {
+  console.log('SOCKET CONNECTED:', socket.id);
 
-  socket.on('move', dir => {
-
-    // Direction-aware blocking
-    if (dir === 'forward' && frontBlocked) return;
-    if (dir === 'backward' && backBlocked) return;
-
-    // ✅ CLEAR BLOCKS WHEN ESCAPING
-    if (dir === 'backward') frontBlocked = false;
-    if (dir === 'forward') backBlocked = false;
-    if (dir === 'left' || dir === 'right') {
-      frontBlocked = false;
-      backBlocked = false;
+  socket.on('move', cmd => {
+    switch (cmd) {
+      case 'forward':  motor.forward();  break;
+      case 'backward': motor.backward(); break;
+      case 'left':     motor.left();     break;
+      case 'right':    motor.right();    break;
     }
+  });
 
-    if (typeof motor[dir] === 'function') {
-      motor[dir]();
-    }
+  socket.on('speed', value => {
+    motor.setSpeed(Number(value));
   });
 
   socket.on('stopAll', () => {
     motor.stopAll();
-    frontBlocked = false;
-    backBlocked = false;
   });
-
-  socket.on('snapshot', () => camCall('/snapshot'));
-
-  socket.on('rec_start', () => {
-    camCall('/rec/start');
-    socket.emit('rec_state', true);
-  });
-
-  socket.on('rec_stop', () => {
-    camCall('/rec/stop');
-    socket.emit('rec_state', false);
-  });
-
-  socket.on('ai_prompt', async prompt => {
-    try {
-      const reply = await ai.ask(prompt);
-      socket.emit('ai_reply', reply);
-    } catch {
-      socket.emit('ai_reply', 'AI error');
-    }
-  });
-
-  const statsInterval = setInterval(() => {
-    socket.emit('stats', {
-      cpu: getCpuUsagePercent(),
-      ram: Math.round(((os.totalmem() - os.freemem()) / os.totalmem()) * 100),
-      temp: getTemperature(),
-      uptime: Math.floor(os.uptime()),
-      age: Math.floor((Date.now() - LEO_BIRTH) / 1000)
-    });
-  }, STATS_INTERVAL_MS);
 
   socket.on('disconnect', () => {
     motor.stopAll();
-    frontBlocked = false;
-    backBlocked = false;
-    clearInterval(statsInterval);
   });
 });
 
 /* ============================================================
-   SENSOR INIT
+   STATS EMIT LOOP
    ============================================================ */
 
-sensors.init(motor, io, handleObstacle);
+setInterval(() => {
+  io.emit('stats', {
+    cpu: getCpuUsage(),
+    ram: getRamUsage(),
+    temp: getTemperature(),
+    uptime: Math.floor((Date.now() - startTime) / 1000),
+    age: Math.floor((Date.now() - LEO_BIRTH.getTime()) / 1000)
+  });
+}, 1000);
 
 /* ============================================================
    START SERVER
    ============================================================ */
 
-server.listen(3000, () => {
-  console.log('Leo server listening on port 3000');
+const PORT = 3000;
+server.listen(PORT, () => {
+  console.log(`Leo server listening on port ${PORT}`);
 });
-
-/* ============================================================
-   GRACEFUL SHUTDOWN
-   ============================================================ */
-
-function shutdown() {
-  console.log('Leo server shutting down');
-
-  try {
-    motor.stopAll();
-  } catch {}
-
-  io.close(() => {
-    server.close(() => process.exit(0));
-  });
-
-  setTimeout(() => process.exit(1), 3000);
-}
-
-process.on('SIGTERM', shutdown);
-process.on('SIGINT', shutdown);

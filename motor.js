@@ -1,110 +1,125 @@
 /*
   FILE: motor.js
   PURPOSE:
-  L298N motor and light controller for Leo.
-  This version uses ENA / ENB as simple ON/OFF enables (no PWM).
-  Motors always run at full speed when enabled.
+  Motor control using L298N with PWM speed control (native pigpio).
+
+  DESIGN:
+  - ENA / ENB use real PWM via pigpio
+  - IN1–IN4 control direction only
+  - PWM reapplied live when speed changes
 */
 
-const pigpio = require('pigpio-client');
+const { Gpio } = require('pigpio');
 
 /* ============================================================
-   PIGPIO CONNECTION
-   - Connects to pigpiod daemon
+   GPIO HANDLES
    ============================================================ */
 
-const pi = pigpio.pigpio({
-  host: '127.0.0.1',
-  port: 8887
-});
+const ENA = new Gpio(18, { mode: Gpio.OUTPUT });
+const ENB = new Gpio(13, { mode: Gpio.OUTPUT });
+
+const IN1 = new Gpio(5,  { mode: Gpio.OUTPUT });
+const IN2 = new Gpio(12, { mode: Gpio.OUTPUT });
+const IN3 = new Gpio(16, { mode: Gpio.OUTPUT });
+const IN4 = new Gpio(20, { mode: Gpio.OUTPUT });
+
+const LIGHT = new Gpio(27, { mode: Gpio.OUTPUT });
 
 /* ============================================================
-   GPIO DECLARATIONS
+   STATE
    ============================================================ */
 
-let IN1, IN2, IN3, IN4;   // Direction pins
-let ENA, ENB;             // Motor enable pins (NO PWM)
-let LIGHT;                // Auxiliary light output
-let ready = false;
+// PWM range 0–255
+let pwmValue = 128; // ≈ 50%
+
+// Track whether motors are currently active
+let motorsActive = false;
 
 /* ============================================================
    INITIALIZATION
-   - Runs once pigpio connects
-   - Sets GPIO modes
-   - Enables motors
    ============================================================ */
 
-pi.on('connected', () => {
-  // Direction pins (L298N IN1–IN4)
-  IN1 = pi.gpio(5);
-  IN2 = pi.gpio(12);
-  IN3 = pi.gpio(16);
-  IN4 = pi.gpio(20);
+stopAll();
+LIGHT.digitalWrite(0);
 
-  // Enable pins (L298N ENA / ENB)
-  ENA = pi.gpio(18);
-  ENB = pi.gpio(13);
-
-  // Optional light output
-  LIGHT = pi.gpio(27);
-
-  // Configure all pins as outputs
-  [IN1, IN2, IN3, IN4, ENA, ENB, LIGHT].forEach(p =>
-      p.modeSet('output')
-  );
-
-  // Enable motors permanently (full speed, no PWM)
-  ENA.write(1);
-  ENB.write(1);
-
-  // Ensure motors are stopped on startup
-  stopAll();
-  lightOff();
-
-  ready = true;
-  console.log('Motor controller ready (ENA/ENB enabled, no PWM)');
-});
+console.log('Motor controller ready (native pigpio PWM)');
 
 /* ============================================================
-   MOTOR CONTROL FUNCTIONS
-   - Direction only
-   - Full speed operation
+   SPEED CONTROL
+   ============================================================ */
+
+function setSpeed(percent) {
+  if (percent < 0) percent = 0;
+  if (percent > 100) percent = 100;
+
+  pwmValue = Math.round((percent / 100) * 255);
+
+  // 🔑 Re-apply PWM immediately if motors are running
+  if (motorsActive) {
+    ENA.pwmWrite(pwmValue);
+    ENB.pwmWrite(pwmValue);
+  }
+
+  console.log(`PWM speed set to ${percent}% (${pwmValue}/255)`);
+}
+
+/* ============================================================
+   INTERNAL HELPERS
+   ============================================================ */
+
+function applyPwm() {
+  ENA.pwmWrite(pwmValue);
+  ENB.pwmWrite(pwmValue);
+}
+
+/* ============================================================
+   MOTOR CONTROL
    ============================================================ */
 
 function stopAll() {
-  if (!ready) return;
+  motorsActive = false;
 
-  // Brake both motors
-  IN1.write(0); IN2.write(0);
-  IN3.write(0); IN4.write(0);
+  IN1.digitalWrite(0); IN2.digitalWrite(0);
+  IN3.digitalWrite(0); IN4.digitalWrite(0);
+
+  ENA.pwmWrite(0);
+  ENB.pwmWrite(0);
 }
 
 function forward() {
-  if (!ready) return;
+  motorsActive = true;
 
-  IN1.write(1); IN2.write(0);
-  IN3.write(1); IN4.write(0);
+  IN1.digitalWrite(1); IN2.digitalWrite(0);
+  IN3.digitalWrite(1); IN4.digitalWrite(0);
+
+  applyPwm();
 }
 
 function backward() {
-  if (!ready) return;
+  motorsActive = true;
 
-  IN1.write(0); IN2.write(1);
-  IN3.write(0); IN4.write(1);
+  IN1.digitalWrite(0); IN2.digitalWrite(1);
+  IN3.digitalWrite(0); IN4.digitalWrite(1);
+
+  applyPwm();
 }
 
 function left() {
-  if (!ready) return;
+  motorsActive = true;
 
-  IN1.write(0); IN2.write(1);
-  IN3.write(1); IN4.write(0);
+  IN1.digitalWrite(0); IN2.digitalWrite(1);
+  IN3.digitalWrite(1); IN4.digitalWrite(0);
+
+  applyPwm();
 }
 
 function right() {
-  if (!ready) return;
+  motorsActive = true;
 
-  IN1.write(1); IN2.write(0);
-  IN3.write(0); IN4.write(1);
+  IN1.digitalWrite(1); IN2.digitalWrite(0);
+  IN3.digitalWrite(0); IN4.digitalWrite(1);
+
+  applyPwm();
 }
 
 /* ============================================================
@@ -112,27 +127,12 @@ function right() {
    ============================================================ */
 
 function lightOn() {
-  if (ready) LIGHT.write(1);
+  LIGHT.digitalWrite(1);
 }
 
 function lightOff() {
-  if (ready) LIGHT.write(0);
+  LIGHT.digitalWrite(0);
 }
-
-/* ============================================================
-   SAFETY HANDLERS
-   - Ensure motors stop on exit
-   ============================================================ */
-
-process.on('SIGINT', () => {
-  stopAll();
-  lightOff();
-});
-
-process.on('SIGTERM', () => {
-  stopAll();
-  lightOff();
-});
 
 /* ============================================================
    EXPORTS
@@ -144,6 +144,7 @@ module.exports = {
   left,
   right,
   stopAll,
+  setSpeed,
   lightOn,
   lightOff
 };

@@ -2,9 +2,7 @@
 
 251226 Recording and ability to take snapshots
 
-251227 AI support and faster restarts
-
-251228 Minor updates heat issues and added obstacle detection
+251217 AI support and faster restarts
 
 
 ### Components needed
@@ -78,13 +76,13 @@ sudo git clone https://github.com/anderssjoeberg75/leo_assistant.git /opt/jarvis
 I know chmod -R 777 gives all privileges but this is just under development
 ```
 sudo chown $USER:$USER /opt/jarvis
-sudo chmod -R 777 /opt/jarvis
+sudo chmod -R 777 /opt/script/jarvis
 ```
 
-### Install Node.JS v 20 LTS
+### Install Node.JS v 18.20.8
 
 ``` 
-curl -fsSL https://deb.nodesource.com/setup_20.x | sudo -E bash -
+curl -sL https://deb.nodesource.com/setup_18.x | sudo -E bash -
 sudo apt update -y
 sudo apt install -y nodejs  
 ```
