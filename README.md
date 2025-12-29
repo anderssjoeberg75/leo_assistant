@@ -78,7 +78,7 @@ sudo git clone https://github.com/anderssjoeberg75/leo_assistant.git /opt/jarvis
 I know chmod -R 777 gives all privileges but this is just under development
 ```
 sudo chown $USER:$USER /opt/jarvis
-sudo chmod -R 777 /opt/script/jarvis
+sudo chmod -R 777 /opt/jarvis
 ```
 
 ### Install Node.JS v 20 LTS
