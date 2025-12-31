@@ -5,9 +5,6 @@
   <title>Leo the assistant</title>
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
 
-  <!-- ============================================================
-       GLOBAL STYLES
-       ============================================================ -->
   <style>
     body {
       margin: 0;
@@ -77,9 +74,6 @@
       gap: 30px;
     }
 
-    /* ============================================================
-       D-PAD
-       ============================================================ */
     #dpad {
       display: grid;
       grid-template-columns: 70px 70px 70px;
@@ -107,9 +101,6 @@
       visibility: hidden;
     }
 
-    /* ============================================================
-       COMBINED STATS + SPEED PANEL
-       ============================================================ */
     #status-panel {
       background: #1c1c1c;
       padding: 14px 18px;
@@ -148,22 +139,6 @@
       width: 100%;
     }
 
-    #obstacle-alert {
-      position: absolute;
-      bottom: 12px;
-      left: 50%;
-      transform: translateX(-50%);
-      color: red;
-      font-size: 18px;
-      font-weight: bold;
-      display: none;
-      pointer-events: none;
-      z-index: 5;
-    }
-
-    /* ============================================================
-       SNAPSHOT FLASH
-       ============================================================ */
     #flash {
       position: absolute;
       top: 0;
@@ -182,31 +157,23 @@
 <body>
 <div id="page">
 
-  <!-- ============================================================
-       CAMERA VIEW
-       ============================================================ -->
-  <div id="camera-wrapper" style="position: relative;">
+  <!-- CAMERA -->
+  <div style="position: relative;">
     <div id="fps-counter">FPS: --</div>
     <div id="rec-indicator">REC</div>
     <img id="camera">
-    <div id="obstacle-alert"></div>
     <div id="flash"></div>
   </div>
 
-  <!-- ============================================================
-       SNAPSHOT / RECORD CONTROLS
-       ============================================================ -->
+  <!-- CONTROLS -->
   <div id="controls">
     <button id="snapshot" class="ctrlbtn">Snapshot</button>
     <button id="record" class="ctrlbtn">Record</button>
   </div>
 
-  <!-- ============================================================
-       MOVEMENT + STATUS
-       ============================================================ -->
+  <!-- MOVEMENT + STATUS -->
   <div id="bottom">
 
-    <!-- D-PAD -->
     <div id="dpad">
       <div class="empty"></div>
       <button id="forward" class="dbtn">↑</button>
@@ -221,9 +188,7 @@
       <div class="empty"></div>
     </div>
 
-    <!-- STATUS + SPEED -->
     <div id="status-panel">
-
       <div id="stats">
         CPU: <span id="cpu">--</span>%<br>
         RAM: <span id="ram">--</span>%<br>
@@ -239,7 +204,6 @@
         </div>
         <input id="speed" type="range" min="0" max="100" value="50">
       </div>
-
     </div>
   </div>
 </div>
@@ -250,50 +214,40 @@
   const $ = id => document.getElementById(id);
   const cameraHost = location.hostname;
 
-  /* ============================================================
-     CAMERA STREAM
-     ============================================================ */
+  /* CAMERA STREAM */
   $('camera').src = `http://${cameraHost}:8888`;
 
-  /* ============================================================
-     FPS FETCH
-     ============================================================ */
+  /* FPS */
   setInterval(async () => {
     try {
-      const res = await fetch(`http://${cameraHost}:8888/fps`);
-      const data = await res.json();
-      $('fps-counter').textContent = `FPS: ${data.fps}`;
+      const r = await fetch(`http://${cameraHost}:8888/fps`);
+      const d = await r.json();
+      $('fps-counter').textContent = `FPS: ${d.fps}`;
     } catch {
       $('fps-counter').textContent = 'FPS: --';
     }
   }, 1000);
 
-  /* ============================================================
-     HOLD-TO-MOVE MOTOR CONTROL
-     ============================================================ */
-  function bindHoldButton(id, direction) {
-    const btn = $(id);
-    const start = () => socket.emit('move', direction);
-    const stop  = () => socket.emit('stopAll');
-
-    btn.addEventListener('mousedown', start);
-    btn.addEventListener('touchstart', start);
-    btn.addEventListener('mouseup', stop);
-    btn.addEventListener('mouseleave', stop);
-    btn.addEventListener('touchend', stop);
-    btn.addEventListener('touchcancel', stop);
+  /* MOVEMENT */
+  function bindHold(id, dir) {
+    const b = $(id);
+    const s = () => socket.emit('move', dir);
+    const e = () => socket.emit('stopAll');
+    b.addEventListener('mousedown', s);
+    b.addEventListener('touchstart', s);
+    b.addEventListener('mouseup', e);
+    b.addEventListener('mouseleave', e);
+    b.addEventListener('touchend', e);
+    b.addEventListener('touchcancel', e);
   }
 
-  bindHoldButton('forward', 'forward');
-  bindHoldButton('backward', 'backward');
-  bindHoldButton('left', 'left');
-  bindHoldButton('right', 'right');
-
+  bindHold('forward', 'forward');
+  bindHold('backward', 'backward');
+  bindHold('left', 'left');
+  bindHold('right', 'right');
   $('stop').addEventListener('mousedown', () => socket.emit('stopAll'));
 
-  /* ============================================================
-     SPEED SLIDER
-     ============================================================ */
+  /* SPEED */
   const speed = $('speed');
   const speedValue = $('speed-value');
 
@@ -302,49 +256,65 @@
     socket.emit('speed', Number(speed.value));
   });
 
-  socket.on('speed:update', value => {
-    speed.value = value;
-    speedValue.textContent = `${value}%`;
+  socket.on('speed:update', v => {
+    speed.value = v;
+    speedValue.textContent = `${v}%`;
   });
 
-  /* ============================================================
-     SNAPSHOT HANDLING (FLASH + SOUND)
-     ============================================================ */
+  /* SNAPSHOT */
   const shutter = new Audio('/shutter.wav');
   const flash = $('flash');
 
-  $('snapshot').addEventListener('click', () => {
-    socket.emit('snapshot');
-  });
+  $('snapshot').addEventListener('click', () => socket.emit('snapshot'));
 
   socket.on('snapshot', () => {
     flash.style.opacity = '1';
     setTimeout(() => flash.style.opacity = '0', 150);
-
     shutter.currentTime = 0;
     shutter.play().catch(() => {});
   });
 
-  /* ============================================================
-     STATS UPDATE
-     ============================================================ */
-  function formatDuration(seconds) {
-    const d = Math.floor(seconds / 86400);
-    const h = Math.floor((seconds % 86400) / 3600);
-    const m = Math.floor((seconds % 3600) / 60);
+  /* RECORDING UI */
+  let recordTimer = null;
+  let recordStart = null;
+
+  $('record').addEventListener('click', () => socket.emit('record'));
+
+  socket.on('record:start', ts => {
+    recordStart = ts;
+    const rec = $('rec-indicator');
+    rec.style.display = 'block';
+
+    recordTimer = setInterval(() => {
+      const sec = Math.floor((Date.now() - recordStart) / 1000);
+      const m = String(Math.floor(sec / 60)).padStart(2, '0');
+      const s = String(sec % 60).padStart(2, '0');
+      rec.textContent = `REC ${m}:${s}`;
+    }, 1000);
+  });
+
+  socket.on('record:stop', () => {
+    clearInterval(recordTimer);
+    recordTimer = null;
+    const rec = $('rec-indicator');
+    rec.style.display = 'none';
+    rec.textContent = 'REC';
+  });
+
+  /* STATS */
+  function fmt(sec) {
+    const d = Math.floor(sec / 86400);
+    const h = Math.floor((sec % 86400) / 3600);
+    const m = Math.floor((sec % 3600) / 60);
     return `${d}d ${h}h ${m}m`;
   }
 
-  function update(id, value) {
-    if ($(id).textContent !== value) $(id).textContent = value;
-  }
-
   socket.on('stats', s => {
-    update('cpu', s.cpu);
-    update('ram', s.ram);
-    update('temp', s.temp ?? '--');
-    update('uptime', formatDuration(s.uptime));
-    update('age', formatDuration(s.age));
+    $('cpu').textContent = s.cpu;
+    $('ram').textContent = s.ram;
+    $('temp').textContent = s.temp ?? '--';
+    $('uptime').textContent = fmt(s.uptime);
+    $('age').textContent = fmt(s.age);
   });
 </script>
 </body>

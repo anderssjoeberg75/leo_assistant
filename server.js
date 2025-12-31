@@ -6,7 +6,8 @@
   - Handle Socket.IO
   - Own motor + speed state
   - Emit real system stats
-  - Capture and save camera snapshots
+  - Capture snapshots
+  - Record MJPEG streams reliably
 */
 
 const path = require('path');
@@ -21,8 +22,10 @@ const { Server } = require('socket.io');
    ============================================================ */
 
 const LEO_BIRTH = new Date('2025-12-22T11:00:00');
-const SNAPSHOT_DIR = '/opt/jarvis/snapshot';
+const CAMERA_HOST = '127.0.0.1';
 const CAMERA_PORT = 8888;
+const SNAPSHOT_DIR = '/opt/jarvis/snapshot';
+const RECORDING_DIR = '/opt/jarvis/recording';
 
 /* ============================================================
    PATHS
@@ -60,7 +63,7 @@ let currentSpeed = 50;
 motor.setSpeed(currentSpeed);
 
 /* ============================================================
-   SYSTEM STATS HELPERS
+   SYSTEM STATS
    ============================================================ */
 
 const startTime = Date.now();
@@ -90,34 +93,26 @@ function getTemperature() {
 }
 
 /* ============================================================
-   SNAPSHOT CAPTURE
+   SNAPSHOT
    ============================================================ */
 
 function captureSnapshot() {
   return new Promise((resolve, reject) => {
-    const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
-    const filePath = path.join(SNAPSHOT_DIR, `${timestamp}.jpg`);
+    const name = new Date().toISOString().replace(/[:.]/g, '-');
+    const filePath = path.join(SNAPSHOT_DIR, `${name}.jpg`);
 
     const req = http.get(
-        {
-          host: '127.0.0.1',
-          port: CAMERA_PORT,
-          path: '/'
-        },
+        { host: CAMERA_HOST, port: CAMERA_PORT, path: '/' },
         res => {
           let buffer = Buffer.alloc(0);
 
           res.on('data', chunk => {
             buffer = Buffer.concat([buffer, chunk]);
-
-            // Look for JPEG end marker
             const end = buffer.indexOf(Buffer.from([0xff, 0xd9]));
             if (end !== -1) {
-              const frame = buffer.slice(0, end + 2);
-              fs.writeFile(filePath, frame, err => {
-                if (err) return reject(err);
-                resolve(filePath);
-              });
+              fs.writeFile(filePath, buffer.slice(0, end + 2), err =>
+                  err ? reject(err) : resolve(filePath)
+              );
               req.destroy();
             }
           });
@@ -126,6 +121,63 @@ function captureSnapshot() {
 
     req.on('error', reject);
   });
+}
+
+/* ============================================================
+   RECORDING STATE
+   ============================================================ */
+
+let recording = false;
+let recordStream = null;
+let recordRequest = null;
+let recordStart = null;
+
+/* ============================================================
+   START RECORDING (FIXED)
+   ============================================================ */
+
+function startRecording() {
+  const name = new Date().toISOString().replace(/[:.]/g, '-');
+  const filePath = path.join(RECORDING_DIR, `${name}.mjpeg`);
+
+  recordStream = fs.createWriteStream(filePath);
+  recordStart = Date.now();
+  recording = true; // ✅ MUST BE SET FIRST
+
+  recordRequest = http.get(
+      { host: CAMERA_HOST, port: CAMERA_PORT, path: '/' },
+      res => {
+        res.on('data', chunk => {
+          if (recordStream) {
+            recordStream.write(chunk);
+          }
+        });
+      }
+  );
+
+  console.log('Recording started:', filePath);
+  return recordStart;
+}
+
+/* ============================================================
+   STOP RECORDING
+   ============================================================ */
+
+function stopRecording() {
+  recording = false;
+
+  if (recordRequest) {
+    recordRequest.destroy();
+    recordRequest = null;
+  }
+
+  if (recordStream) {
+    recordStream.end();
+    recordStream = null;
+  }
+
+  recordStart = null;
+  console.log('Recording stopped');
 }
 
 /* ============================================================
@@ -152,26 +204,27 @@ io.on('connection', socket => {
     io.emit('speed:update', currentSpeed);
   });
 
-  /* ================= SNAPSHOT ================= */
   socket.on('snapshot', async () => {
-    console.log('Snapshot requested');
-
     try {
-      const file = await captureSnapshot();
-      console.log('Snapshot saved:', file);
+      await captureSnapshot();
       io.emit('snapshot');
-    } catch (err) {
-      console.error('Snapshot failed:', err.message);
+    } catch (e) {
+      console.error('Snapshot failed:', e.message);
     }
   });
 
-  socket.on('stopAll', () => {
-    motor.stopAll();
+  socket.on('record', () => {
+    if (!recording) {
+      const ts = startRecording();
+      io.emit('record:start', ts);
+    } else {
+      stopRecording();
+      io.emit('record:stop');
+    }
   });
 
-  socket.on('disconnect', () => {
-    motor.stopAll();
-  });
+  socket.on('stopAll', () => motor.stopAll());
+  socket.on('disconnect', () => motor.stopAll());
 });
 
 /* ============================================================
