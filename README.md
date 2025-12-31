@@ -4,7 +4,7 @@
 
 251227 AI support and faster restarts
 
-251230 Xbox controller support and bug fixes
+251230 Xbox controller support and bug fixes, updates to snapshot and recordings
 
 
 ### Components needed

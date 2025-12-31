@@ -20,10 +20,36 @@
       align-items: center;
     }
 
+    /* CAMERA AREA (RESERVED SPACE) */
+    #camera-wrapper {
+      position: relative;
+      width: 640px;
+      height: 480px;
+      background: #111;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+
     #camera {
       max-width: 100%;
-      height: auto;
+      max-height: 100%;
       display: block;
+    }
+
+    #placeholder {
+      position: absolute;
+      inset: 0;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      color: #666;
+      font-size: 16px;
+      letter-spacing: 1px;
+    }
+
+    #placeholder.hidden {
+      display: none;
     }
 
     #fps-counter {
@@ -33,7 +59,6 @@
       color: red;
       font-size: 16px;
       pointer-events: none;
-      text-shadow: 0 0 6px rgba(0,0,0,0.8);
       z-index: 5;
     }
 
@@ -42,7 +67,6 @@
       top: 12px;
       right: 12px;
       background: red;
-      color: white;
       padding: 6px 10px;
       border-radius: 6px;
       font-weight: bold;
@@ -50,10 +74,22 @@
       z-index: 5;
     }
 
+    #flash {
+      position: absolute;
+      inset: 0;
+      background: white;
+      opacity: 0;
+      pointer-events: none;
+      transition: opacity 0.15s ease;
+      z-index: 4;
+    }
+
     #controls {
       margin-top: 15px;
       display: flex;
-      gap: 15px;
+      gap: 10px;
+      flex-wrap: wrap;
+      justify-content: center;
     }
 
     .ctrlbtn {
@@ -61,10 +97,14 @@
       color: white;
       border: none;
       border-radius: 8px;
-      padding: 10px 16px;
-      font-size: 16px;
+      padding: 10px 14px;
+      font-size: 14px;
       cursor: pointer;
+      min-width: 110px;
     }
+
+    .ctrlbtn.active { background: #444; }
+    .ctrlbtn.inactive { background: #700; }
 
     #bottom {
       display: flex;
@@ -89,67 +129,19 @@
       font-size: 24px;
       font-weight: bold;
       cursor: pointer;
-      user-select: none;
     }
 
-    .dbtn:active {
-      background: red;
-      color: #fff;
-    }
-
-    .empty {
-      visibility: hidden;
-    }
+    .empty { visibility: hidden; }
 
     #status-panel {
       background: #1c1c1c;
       padding: 14px 18px;
       border-radius: 10px;
-      display: flex;
-      flex-direction: column;
       min-width: 220px;
-    }
-
-    #stats {
-      font-size: 14px;
-      font-weight: bold;
       text-align: left;
-      line-height: 2.5;
-    }
-
-    #speed-control {
-      margin-top: 10px;
-      display: flex;
-      flex-direction: column;
-      gap: 6px;
-    }
-
-    #speed-label {
-      display: flex;
-      justify-content: space-between;
-      font-size: 14px;
       font-weight: bold;
-    }
-
-    #speed-value {
-      color: red;
-    }
-
-    #speed {
-      width: 100%;
-    }
-
-    #flash {
-      position: absolute;
-      top: 0;
-      left: 0;
-      width: 100%;
-      height: 100%;
-      background: white;
-      opacity: 0;
-      pointer-events: none;
-      transition: opacity 0.15s ease;
-      z-index: 4;
+      font-size: 14px;
+      line-height: 2.2;
     }
   </style>
 </head>
@@ -158,22 +150,33 @@
 <div id="page">
 
   <!-- CAMERA -->
-  <div style="position: relative;">
+  <div id="camera-wrapper">
     <div id="fps-counter">FPS: --</div>
     <div id="rec-indicator">REC</div>
+
     <img id="camera">
+    <div id="placeholder">STREAM OFF</div>
     <div id="flash"></div>
   </div>
 
   <!-- CONTROLS -->
   <div id="controls">
-    <button id="snapshot" class="ctrlbtn">Snapshot</button>
-    <button id="record" class="ctrlbtn">Record</button>
+    <button id="snapshot" class="ctrlbtn">📸</button>
+
+    <button id="record" class="ctrlbtn">
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 24" width="48" height="24">
+        <rect x="1" y="1" width="62" height="22" rx="4" ry="4" fill="red"/>
+        <text x="32" y="17" text-anchor="middle" fill="white"
+              font-size="14" font-family="Arial" font-weight="bold">REC</text>
+      </svg>
+    </button>
+
+    <button id="toggle-stream" class="ctrlbtn active">📡 Stream ON</button>
+    <button id="toggle-controller" class="ctrlbtn active">🎮 ON</button>
   </div>
 
   <!-- MOVEMENT + STATUS -->
   <div id="bottom">
-
     <div id="dpad">
       <div class="empty"></div>
       <button id="forward" class="dbtn">↑</button>
@@ -189,21 +192,11 @@
     </div>
 
     <div id="status-panel">
-      <div id="stats">
-        CPU: <span id="cpu">--</span>%<br>
-        RAM: <span id="ram">--</span>%<br>
-        Temp: <span id="temp">--</span> °C<br>
-        Uptime: <span id="uptime">--</span><br>
-        Leo age: <span id="age">--</span>
-      </div>
-
-      <div id="speed-control">
-        <div id="speed-label">
-          <span>Speed</span>
-          <span id="speed-value">50%</span>
-        </div>
-        <input id="speed" type="range" min="0" max="100" value="50">
-      </div>
+      CPU: <span id="cpu">--</span>%<br>
+      RAM: <span id="ram">--</span>%<br>
+      Temp: <span id="temp">--</span> °C<br>
+      Uptime: <span id="uptime">--</span><br>
+      Leo age: <span id="age">--</span>
     </div>
   </div>
 </div>
@@ -212,60 +205,58 @@
 <script>
   const socket = io();
   const $ = id => document.getElementById(id);
-  const cameraHost = location.hostname;
+  const host = location.hostname;
 
-  /* CAMERA STREAM */
-  $('camera').src = `http://${cameraHost}:8888`;
+  let streamEnabled = true;
+  let controllerEnabled = true;
 
-  /* FPS */
-  setInterval(async () => {
-    try {
-      const r = await fetch(`http://${cameraHost}:8888/fps`);
-      const d = await r.json();
-      $('fps-counter').textContent = `FPS: ${d.fps}`;
-    } catch {
-      $('fps-counter').textContent = 'FPS: --';
-    }
-  }, 1000);
+  /* ================= CAMERA STREAM ================= */
 
-  /* MOVEMENT */
-  function bindHold(id, dir) {
-    const b = $(id);
-    const s = () => socket.emit('move', dir);
-    const e = () => socket.emit('stopAll');
-    b.addEventListener('mousedown', s);
-    b.addEventListener('touchstart', s);
-    b.addEventListener('mouseup', e);
-    b.addEventListener('mouseleave', e);
-    b.addEventListener('touchend', e);
-    b.addEventListener('touchcancel', e);
+  function startStream() {
+    $('camera').style.display = 'block';
+    $('placeholder').classList.add('hidden');
+    $('camera').src = `http://${host}:8888`;
   }
 
-  bindHold('forward', 'forward');
-  bindHold('backward', 'backward');
-  bindHold('left', 'left');
-  bindHold('right', 'right');
-  $('stop').addEventListener('mousedown', () => socket.emit('stopAll'));
+  function stopStream() {
+    $('camera').style.display = 'none';
+    $('placeholder').classList.remove('hidden');
+    $('camera').src = '';
+    $('fps-counter').textContent = 'FPS: --';
+  }
 
-  /* SPEED */
-  const speed = $('speed');
-  const speedValue = $('speed-value');
+  startStream();
 
-  speed.addEventListener('input', () => {
-    speedValue.textContent = `${speed.value}%`;
-    socket.emit('speed', Number(speed.value));
-  });
+  $('toggle-stream').onclick = () => {
+    streamEnabled = !streamEnabled;
+    if (streamEnabled) {
+      startStream();
+      $('toggle-stream').textContent = '📡 Stream ON';
+      $('toggle-stream').className = 'ctrlbtn active';
+    } else {
+      stopStream();
+      $('toggle-stream').textContent = '📡 Stream OFF';
+      $('toggle-stream').className = 'ctrlbtn inactive';
+    }
+  };
 
-  socket.on('speed:update', v => {
-    speed.value = v;
-    speedValue.textContent = `${v}%`;
-  });
+  /* ================= CONTROLLER ================= */
 
-  /* SNAPSHOT */
+  $('toggle-controller').onclick = () => {
+    controllerEnabled = !controllerEnabled;
+    socket.emit('controller:toggle', controllerEnabled);
+    $('toggle-controller').textContent = controllerEnabled ? '🎮 ON' : '🎮 OFF';
+    $('toggle-controller').className =
+            controllerEnabled ? 'ctrlbtn active' : 'ctrlbtn inactive';
+  };
+
+  /* ================= SNAPSHOT / RECORD ================= */
+
+  $('snapshot').onclick = () => socket.emit('snapshot');
+  $('record').onclick = () => socket.emit('record');
+
   const shutter = new Audio('/shutter.wav');
   const flash = $('flash');
-
-  $('snapshot').addEventListener('click', () => socket.emit('snapshot'));
 
   socket.on('snapshot', () => {
     flash.style.opacity = '1';
@@ -274,38 +265,28 @@
     shutter.play().catch(() => {});
   });
 
-  /* RECORDING UI */
-  let recordTimer = null;
-  let recordStart = null;
+  socket.on('record:start', () => $('rec-indicator').style.display = 'block');
+  socket.on('record:stop', () => $('rec-indicator').style.display = 'none');
 
-  $('record').addEventListener('click', () => socket.emit('record'));
+  /* ================= FPS FETCH (RESTORED) ================= */
 
-  socket.on('record:start', ts => {
-    recordStart = ts;
-    const rec = $('rec-indicator');
-    rec.style.display = 'block';
+  setInterval(async () => {
+    if (!streamEnabled) return;
+    try {
+      const res = await fetch(`http://${host}:8888/fps`);
+      const data = await res.json();
+      $('fps-counter').textContent = `FPS: ${data.fps}`;
+    } catch {
+      $('fps-counter').textContent = 'FPS: --';
+    }
+  }, 1000);
 
-    recordTimer = setInterval(() => {
-      const sec = Math.floor((Date.now() - recordStart) / 1000);
-      const m = String(Math.floor(sec / 60)).padStart(2, '0');
-      const s = String(sec % 60).padStart(2, '0');
-      rec.textContent = `REC ${m}:${s}`;
-    }, 1000);
-  });
+  /* ================= STATS UPDATE ================= */
 
-  socket.on('record:stop', () => {
-    clearInterval(recordTimer);
-    recordTimer = null;
-    const rec = $('rec-indicator');
-    rec.style.display = 'none';
-    rec.textContent = 'REC';
-  });
-
-  /* STATS */
-  function fmt(sec) {
-    const d = Math.floor(sec / 86400);
-    const h = Math.floor((sec % 86400) / 3600);
-    const m = Math.floor((sec % 3600) / 60);
+  function formatDuration(seconds) {
+    const d = Math.floor(seconds / 86400);
+    const h = Math.floor((seconds % 86400) / 3600);
+    const m = Math.floor((seconds % 3600) / 60);
     return `${d}d ${h}h ${m}m`;
   }
 
@@ -313,8 +294,8 @@
     $('cpu').textContent = s.cpu;
     $('ram').textContent = s.ram;
     $('temp').textContent = s.temp ?? '--';
-    $('uptime').textContent = fmt(s.uptime);
-    $('age').textContent = fmt(s.age);
+    $('uptime').textContent = formatDuration(s.uptime);
+    $('age').textContent = formatDuration(s.age);
   });
 </script>
 </body>
