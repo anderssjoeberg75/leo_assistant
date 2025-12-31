@@ -100,6 +100,7 @@ cd /opt/jarvis
 sudo npm install
 sudo npm install pigpio-client
 sudo npm install socket.io-client
+sudo npm install joystick
 ``` 
 ### Make camera start streaming at boot
 ``` 

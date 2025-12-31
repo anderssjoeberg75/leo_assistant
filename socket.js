@@ -1,22 +1,41 @@
-/*
-  FILE: socket.js
+/* ============================================================
+   SOCKET.IO HANDLERS
+   ============================================================ */
 
-  PURPOSE:
-  - Share a single Socket.IO instance across modules
-  - Allows controller.js to emit events to the UI
-*/
+let currentSpeed = 50;
+motor.setSpeed(currentSpeed);
 
-let ioInstance = null;
+io.on('connection', socket => {
+    console.log('SOCKET CONNECTED:', socket.id);
 
-module.exports = {
-    setIO(io) {
-        ioInstance = io;
-    },
+    // Send current speed to GUI on connect
+    socket.emit('speed:update', currentSpeed);
 
-    get io() {
-        if (!ioInstance) {
-            throw new Error('Socket.IO not initialized');
+    socket.on('move', cmd => {
+        switch (cmd) {
+            case 'forward':  motor.forward();  break;
+            case 'backward': motor.backward(); break;
+            case 'left':     motor.left();     break;
+            case 'right':    motor.right();    break;
         }
-        return ioInstance;
-    }
-};
+    });
+
+    /* ================= SPEED COMMAND ================= */
+    socket.on('speed', value => {
+        currentSpeed = Number(value);
+        motor.setSpeed(currentSpeed);
+
+        // 🔑 THIS WAS MISSING / WRONG BEFORE
+        io.emit('speed:update', currentSpeed);
+
+        console.log('Speed set to', currentSpeed);
+    });
+
+    socket.on('stopAll', () => {
+        motor.stopAll();
+    });
+
+    socket.on('disconnect', () => {
+        motor.stopAll();
+    });
+});

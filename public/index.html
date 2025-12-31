@@ -116,7 +116,6 @@
       min-width: 220px;
     }
 
-    /* Stats text (baseline style) */
     #stats {
       font-size: 14px;
       font-weight: bold;
@@ -125,10 +124,10 @@
     }
 
     /* ============================================================
-       SPEED SLIDER (MATCHING STATS STYLE)
+       SPEED SLIDER
        ============================================================ */
     #speed-control {
-      margin-top: 10px; /* subtle gap from stats */
+      margin-top: 10px;
       display: flex;
       flex-direction: column;
       gap: 6px;
@@ -137,8 +136,8 @@
     #speed-label {
       display: flex;
       justify-content: space-between;
-      font-size: 14px;   /* same as stats */
-      font-weight: bold; /* same as stats */
+      font-size: 14px;
+      font-weight: bold;
     }
 
     #speed-value {
@@ -204,12 +203,9 @@
       <div class="empty"></div>
     </div>
 
-    <!-- ============================================================
-         STATS + SPEED (SINGLE GREY PANEL)
-         ============================================================ -->
+    <!-- STATUS + SPEED -->
     <div id="status-panel">
 
-      <!-- Stats -->
       <div id="stats">
         CPU: <span id="cpu">--</span>%<br>
         RAM: <span id="ram">--</span>%<br>
@@ -218,19 +214,12 @@
         Leo age: <span id="age">--</span>
       </div>
 
-      <!-- Speed slider -->
       <div id="speed-control">
         <div id="speed-label">
           <span>Speed</span>
           <span id="speed-value">50%</span>
         </div>
-        <input
-                id="speed"
-                type="range"
-                min="0"
-                max="100"
-                value="50"
-        >
+        <input id="speed" type="range" min="0" max="100" value="50">
       </div>
 
     </div>
@@ -286,7 +275,7 @@
   $('stop').addEventListener('mousedown', () => socket.emit('stopAll'));
 
   /* ============================================================
-     SPEED SLIDER (UI ONLY)
+     SPEED SLIDER (GUI → SERVER)
      ============================================================ */
   const speed = $('speed');
   const speedValue = $('speed-value');
@@ -294,6 +283,15 @@
   speed.addEventListener('input', () => {
     speedValue.textContent = `${speed.value}%`;
     socket.emit('speed', Number(speed.value));
+  });
+
+  /* ============================================================
+     SPEED SYNC (SERVER → GUI)
+     THIS IS THE ONLY ADDITION
+     ============================================================ */
+  socket.on('speed:update', value => {
+    speed.value = value;
+    speedValue.textContent = `${value}%`;
   });
 
   /* ============================================================

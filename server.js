@@ -4,9 +4,9 @@
   PURPOSE:
   - Serve GUI
   - Handle Socket.IO
-  - Control motors with PWM
-  - Emit system stats
-  - Initialize shared Socket.IO instance for controller input
+  - Own motor + speed state
+  - Broadcast speed updates
+  - Emit real system stats (CPU, RAM, Temp)
 */
 
 const path = require('path');
@@ -35,7 +35,6 @@ const INDEX_FILE   = path.join(PUBLIC_DIR, 'index.html');
    ============================================================ */
 
 const motor = require('/opt/jarvis/motor.js');
-const socketHelper = require('/opt/jarvis/socket.js');
 
 /* ============================================================
    EXPRESS + HTTP
@@ -45,13 +44,6 @@ const app = express();
 const server = http.createServer(app);
 const io = new Server(server, { cors: { origin: "*" } });
 
-/*
-  IMPORTANT:
-  Share the Socket.IO instance so controller.js
-  can emit events (speed, snapshot, record, etc.)
-*/
-socketHelper.setIO(io);
-
 app.use(express.static(PUBLIC_DIR));
 
 app.get('/', (req, res) => {
@@ -59,29 +51,45 @@ app.get('/', (req, res) => {
 });
 
 /* ============================================================
-   SYSTEM STATS
+   SPEED STATE (SINGLE SOURCE OF TRUTH)
+   ============================================================ */
+
+let currentSpeed = 50;
+motor.setSpeed(currentSpeed);
+
+/* ============================================================
+   SYSTEM STATS HELPERS (RESTORED)
    ============================================================ */
 
 const startTime = Date.now();
 
 function getCpuUsage() {
   const cpus = os.cpus();
-  let idle = 0, total = 0;
+  let idle = 0;
+  let total = 0;
+
   cpus.forEach(cpu => {
-    for (const t in cpu.times) total += cpu.times[t];
+    for (const type in cpu.times) {
+      total += cpu.times[type];
+    }
     idle += cpu.times.idle;
   });
+
   return Math.round(100 - (idle / total) * 100);
 }
 
 function getRamUsage() {
-  return Math.round(((os.totalmem() - os.freemem()) / os.totalmem()) * 100);
+  return Math.round(
+      ((os.totalmem() - os.freemem()) / os.totalmem()) * 100
+  );
 }
 
 function getTemperature() {
   try {
     return Math.round(
-        parseInt(fs.readFileSync('/sys/class/thermal/thermal_zone0/temp')) / 1000
+        parseInt(
+            fs.readFileSync('/sys/class/thermal/thermal_zone0/temp')
+        ) / 1000
     );
   } catch {
     return null;
@@ -89,11 +97,14 @@ function getTemperature() {
 }
 
 /* ============================================================
-   SOCKET.IO HANDLERS
+   SOCKET.IO
    ============================================================ */
 
 io.on('connection', socket => {
   console.log('SOCKET CONNECTED:', socket.id);
+
+  // Send current speed immediately to GUI
+  socket.emit('speed:update', currentSpeed);
 
   socket.on('move', cmd => {
     switch (cmd) {
@@ -104,8 +115,15 @@ io.on('connection', socket => {
     }
   });
 
+  /* ================= SPEED COMMAND ================= */
   socket.on('speed', value => {
-    motor.setSpeed(Number(value));
+    currentSpeed = Number(value);
+    motor.setSpeed(currentSpeed);
+
+    // Broadcast authoritative speed
+    io.emit('speed:update', currentSpeed);
+
+    console.log(`Speed set to ${currentSpeed}%`);
   });
 
   socket.on('stopAll', () => {
@@ -118,7 +136,7 @@ io.on('connection', socket => {
 });
 
 /* ============================================================
-   STATS EMIT LOOP
+   STATS EMIT LOOP (REAL VALUES)
    ============================================================ */
 
 setInterval(() => {
