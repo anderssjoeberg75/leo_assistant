@@ -5,15 +5,15 @@
   - Serve GUI
   - Handle Socket.IO
   - Own motor + speed state
-  - Broadcast speed updates
-  - Emit real system stats (CPU, RAM, Temp)
+  - Emit real system stats
+  - Capture and save camera snapshots
 */
 
 const path = require('path');
 const os = require('os');
 const fs = require('fs');
-const express = require('express');
 const http = require('http');
+const express = require('express');
 const { Server } = require('socket.io');
 
 /* ============================================================
@@ -21,6 +21,8 @@ const { Server } = require('socket.io');
    ============================================================ */
 
 const LEO_BIRTH = new Date('2025-12-22T11:00:00');
+const SNAPSHOT_DIR = '/opt/jarvis/snapshot';
+const CAMERA_PORT = 8888;
 
 /* ============================================================
    PATHS
@@ -51,49 +53,79 @@ app.get('/', (req, res) => {
 });
 
 /* ============================================================
-   SPEED STATE (SINGLE SOURCE OF TRUTH)
+   SPEED STATE
    ============================================================ */
 
 let currentSpeed = 50;
 motor.setSpeed(currentSpeed);
 
 /* ============================================================
-   SYSTEM STATS HELPERS (RESTORED)
+   SYSTEM STATS HELPERS
    ============================================================ */
 
 const startTime = Date.now();
 
 function getCpuUsage() {
   const cpus = os.cpus();
-  let idle = 0;
-  let total = 0;
-
+  let idle = 0, total = 0;
   cpus.forEach(cpu => {
-    for (const type in cpu.times) {
-      total += cpu.times[type];
-    }
+    for (const t in cpu.times) total += cpu.times[t];
     idle += cpu.times.idle;
   });
-
   return Math.round(100 - (idle / total) * 100);
 }
 
 function getRamUsage() {
-  return Math.round(
-      ((os.totalmem() - os.freemem()) / os.totalmem()) * 100
-  );
+  return Math.round(((os.totalmem() - os.freemem()) / os.totalmem()) * 100);
 }
 
 function getTemperature() {
   try {
     return Math.round(
-        parseInt(
-            fs.readFileSync('/sys/class/thermal/thermal_zone0/temp')
-        ) / 1000
+        parseInt(fs.readFileSync('/sys/class/thermal/thermal_zone0/temp')) / 1000
     );
   } catch {
     return null;
   }
+}
+
+/* ============================================================
+   SNAPSHOT CAPTURE
+   ============================================================ */
+
+function captureSnapshot() {
+  return new Promise((resolve, reject) => {
+    const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
+    const filePath = path.join(SNAPSHOT_DIR, `${timestamp}.jpg`);
+
+    const req = http.get(
+        {
+          host: '127.0.0.1',
+          port: CAMERA_PORT,
+          path: '/'
+        },
+        res => {
+          let buffer = Buffer.alloc(0);
+
+          res.on('data', chunk => {
+            buffer = Buffer.concat([buffer, chunk]);
+
+            // Look for JPEG end marker
+            const end = buffer.indexOf(Buffer.from([0xff, 0xd9]));
+            if (end !== -1) {
+              const frame = buffer.slice(0, end + 2);
+              fs.writeFile(filePath, frame, err => {
+                if (err) return reject(err);
+                resolve(filePath);
+              });
+              req.destroy();
+            }
+          });
+        }
+    );
+
+    req.on('error', reject);
+  });
 }
 
 /* ============================================================
@@ -103,7 +135,6 @@ function getTemperature() {
 io.on('connection', socket => {
   console.log('SOCKET CONNECTED:', socket.id);
 
-  // Send current speed immediately to GUI
   socket.emit('speed:update', currentSpeed);
 
   socket.on('move', cmd => {
@@ -115,15 +146,23 @@ io.on('connection', socket => {
     }
   });
 
-  /* ================= SPEED COMMAND ================= */
   socket.on('speed', value => {
     currentSpeed = Number(value);
     motor.setSpeed(currentSpeed);
-
-    // Broadcast authoritative speed
     io.emit('speed:update', currentSpeed);
+  });
 
-    console.log(`Speed set to ${currentSpeed}%`);
+  /* ================= SNAPSHOT ================= */
+  socket.on('snapshot', async () => {
+    console.log('Snapshot requested');
+
+    try {
+      const file = await captureSnapshot();
+      console.log('Snapshot saved:', file);
+      io.emit('snapshot');
+    } catch (err) {
+      console.error('Snapshot failed:', err.message);
+    }
   });
 
   socket.on('stopAll', () => {
@@ -136,7 +175,7 @@ io.on('connection', socket => {
 });
 
 /* ============================================================
-   STATS EMIT LOOP (REAL VALUES)
+   STATS LOOP
    ============================================================ */
 
 setInterval(() => {
@@ -153,7 +192,6 @@ setInterval(() => {
    START SERVER
    ============================================================ */
 
-const PORT = 3000;
-server.listen(PORT, () => {
-  console.log(`Leo server listening on port ${PORT}`);
+server.listen(3000, () => {
+  console.log('Leo server listening on port 3000');
 });

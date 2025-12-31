@@ -26,6 +26,7 @@
     #camera {
       max-width: 100%;
       height: auto;
+      display: block;
     }
 
     #fps-counter {
@@ -36,6 +37,7 @@
       font-size: 16px;
       pointer-events: none;
       text-shadow: 0 0 6px rgba(0,0,0,0.8);
+      z-index: 5;
     }
 
     #rec-indicator {
@@ -48,6 +50,7 @@
       border-radius: 6px;
       font-weight: bold;
       display: none;
+      z-index: 5;
     }
 
     #controls {
@@ -123,9 +126,6 @@
       line-height: 2.5;
     }
 
-    /* ============================================================
-       SPEED SLIDER
-       ============================================================ */
     #speed-control {
       margin-top: 10px;
       display: flex;
@@ -158,6 +158,23 @@
       font-weight: bold;
       display: none;
       pointer-events: none;
+      z-index: 5;
+    }
+
+    /* ============================================================
+       SNAPSHOT FLASH
+       ============================================================ */
+    #flash {
+      position: absolute;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      background: white;
+      opacity: 0;
+      pointer-events: none;
+      transition: opacity 0.15s ease;
+      z-index: 4;
     }
   </style>
 </head>
@@ -168,11 +185,12 @@
   <!-- ============================================================
        CAMERA VIEW
        ============================================================ -->
-  <div style="position: relative;">
+  <div id="camera-wrapper" style="position: relative;">
     <div id="fps-counter">FPS: --</div>
     <div id="rec-indicator">REC</div>
     <img id="camera">
     <div id="obstacle-alert"></div>
+    <div id="flash"></div>
   </div>
 
   <!-- ============================================================
@@ -260,7 +278,6 @@
 
     btn.addEventListener('mousedown', start);
     btn.addEventListener('touchstart', start);
-
     btn.addEventListener('mouseup', stop);
     btn.addEventListener('mouseleave', stop);
     btn.addEventListener('touchend', stop);
@@ -275,7 +292,7 @@
   $('stop').addEventListener('mousedown', () => socket.emit('stopAll'));
 
   /* ============================================================
-     SPEED SLIDER (GUI → SERVER)
+     SPEED SLIDER
      ============================================================ */
   const speed = $('speed');
   const speedValue = $('speed-value');
@@ -285,13 +302,27 @@
     socket.emit('speed', Number(speed.value));
   });
 
-  /* ============================================================
-     SPEED SYNC (SERVER → GUI)
-     THIS IS THE ONLY ADDITION
-     ============================================================ */
   socket.on('speed:update', value => {
     speed.value = value;
     speedValue.textContent = `${value}%`;
+  });
+
+  /* ============================================================
+     SNAPSHOT HANDLING (FLASH + SOUND)
+     ============================================================ */
+  const shutter = new Audio('/shutter.wav');
+  const flash = $('flash');
+
+  $('snapshot').addEventListener('click', () => {
+    socket.emit('snapshot');
+  });
+
+  socket.on('snapshot', () => {
+    flash.style.opacity = '1';
+    setTimeout(() => flash.style.opacity = '0', 150);
+
+    shutter.currentTime = 0;
+    shutter.play().catch(() => {});
   });
 
   /* ============================================================
