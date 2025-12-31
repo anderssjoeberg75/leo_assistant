@@ -1,10 +1,12 @@
 /*
   FILE: server.js
+
   PURPOSE:
   - Serve GUI
   - Handle Socket.IO
   - Control motors with PWM
   - Emit system stats
+  - Initialize shared Socket.IO instance for controller input
 */
 
 const path = require('path');
@@ -32,8 +34,8 @@ const INDEX_FILE   = path.join(PUBLIC_DIR, 'index.html');
    SUBSYSTEMS
    ============================================================ */
 
-const motor   = require('/opt/jarvis/motor.js');
-//const sensors = require('/opt/jarvis/sensors.js');
+const motor = require('/opt/jarvis/motor.js');
+const socketHelper = require('/opt/jarvis/socket.js');
 
 /* ============================================================
    EXPRESS + HTTP
@@ -42,6 +44,13 @@ const motor   = require('/opt/jarvis/motor.js');
 const app = express();
 const server = http.createServer(app);
 const io = new Server(server, { cors: { origin: "*" } });
+
+/*
+  IMPORTANT:
+  Share the Socket.IO instance so controller.js
+  can emit events (speed, snapshot, record, etc.)
+*/
+socketHelper.setIO(io);
 
 app.use(express.static(PUBLIC_DIR));
 

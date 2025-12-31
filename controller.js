@@ -3,134 +3,135 @@
 
   PURPOSE:
   - Read Xbox controller via Linux joystick (/dev/input/js0)
-  - Control motors
-  - Update UI speed slider when speed changes on controller
-  - Mapping based on actual jstest output
+  - Connect to Leo server as a Socket.IO CLIENT
+  - Send movement, speed, snapshot and record commands
+  - Never touch GPIO or pigpio
 */
 
-const Joystick = require('joystick');
-const motor = require('./motor');
-const socketHelper = require('./socket');
+const io = require('socket.io-client');
+
+/* ============================================================
+   SOCKET.IO CLIENT
+   ============================================================ */
+
+// Connect to local Leo server
+const socket = io('http://127.0.0.1:3000', {
+    reconnection: true,
+    reconnectionDelay: 1000,
+    transports: ['websocket']
+});
 
 /* ============================================================
    CONFIGURATION
    ============================================================ */
 
-// Linux joystick device number (js0)
 const DEVICE_NUMBER = 0;
-
-// Deadzone to prevent stick drift
 const DEADZONE = 0.15;
+const RETRY_INTERVAL = 2000;
 
-// Current speed (0–100)
 let speed = 50;
+let isRecording = false;
+let joystick = null;
 
 /* ============================================================
-   INITIALIZATION
-   ============================================================ */
-
-let joystick;
-
-try {
-    joystick = new Joystick(DEVICE_NUMBER);
-    console.log('Xbox controller connected via /dev/input/js0');
-} catch (err) {
-    console.error('Failed to open joystick:', err);
-    process.exit(1);
-}
-
-/* ============================================================
-   HELPER: UPDATE SPEED
-   PURPOSE:
-   - Update motor speed
-   - Notify all UI clients so slider moves
+   SPEED UPDATE
    ============================================================ */
 
 function updateSpeed(newSpeed) {
     speed = newSpeed;
-    motor.setSpeed(speed);
+    socket.emit('speed', speed);
+}
+
+/* ============================================================
+   CONTROLLER INITIALIZATION
+   ============================================================ */
+
+function initController() {
+    let Joystick;
 
     try {
-        socketHelper.io.emit('speed:update', speed);
+        Joystick = require('joystick');
     } catch {
-        // Socket.IO may not be ready during early startup
+        console.log('Joystick module not ready, retrying...');
+        return setTimeout(initController, RETRY_INTERVAL);
+    }
+
+    try {
+        joystick = new Joystick(DEVICE_NUMBER);
+        console.log('Xbox controller connected on /dev/input/js0');
+        bindEvents();
+    } catch {
+        console.log('Waiting for Xbox controller device...');
+        setTimeout(initController, RETRY_INTERVAL);
     }
 }
 
 /* ============================================================
-   AXIS HANDLING
-   AXIS MAP (VERIFIED):
-   0 = Left stick X
-   1 = Left stick Y
+   EVENT BINDINGS
    ============================================================ */
 
-let axisX = 0;
-let axisY = 0;
+function bindEvents() {
+    let axisX = 0;
+    let axisY = 0;
 
-joystick.on('axis', event => {
-    const value = event.value / 32767;
+    /* ================= AXIS ================= */
 
-    if (event.number === 0) axisX = value;
-    if (event.number === 1) axisY = value;
+    joystick.on('axis', event => {
+        const value = event.value / 32767;
 
-    // Deadzone → stop
-    if (Math.abs(axisX) < DEADZONE && Math.abs(axisY) < DEADZONE) {
-        motor.stopAll();
-        return;
-    }
+        if (event.number === 0) axisX = value;
+        if (event.number === 1) axisY = value;
 
-    if (axisY < -DEADZONE) motor.forward();
-    if (axisY >  DEADZONE) motor.backward();
+        if (Math.abs(axisX) < DEADZONE && Math.abs(axisY) < DEADZONE) {
+            socket.emit('stopAll');
+            return;
+        }
 
-    if (axisX < -DEADZONE) motor.left();
-    if (axisX >  DEADZONE) motor.right();
-});
+        if (axisY < -DEADZONE) socket.emit('move', 'forward');
+        if (axisY >  DEADZONE) socket.emit('move', 'backward');
+        if (axisX < -DEADZONE) socket.emit('move', 'left');
+        if (axisX >  DEADZONE) socket.emit('move', 'right');
+    });
+
+    /* ================= BUTTONS ================= */
+
+    joystick.on('button', event => {
+        if (!event.value) return;
+
+        switch (event.number) {
+            case 0: // A
+                console.log('Controller: Snapshot');
+                socket.emit('snapshot');
+                break;
+
+            case 1: // B
+                isRecording = !isRecording;
+                socket.emit(isRecording ? 'record:start' : 'record:stop');
+                console.log(`Controller: Record ${isRecording ? 'START' : 'STOP'}`);
+                break;
+
+            case 6: // LB
+                updateSpeed(Math.max(5, speed - 5));
+                break;
+
+            case 7: // RB
+                updateSpeed(Math.min(100, speed + 5));
+                break;
+        }
+    });
+
+    /* ================= DISCONNECT ================= */
+
+    joystick.on('error', () => {
+        console.log('Joystick disconnected');
+        socket.emit('stopAll');
+        joystick = null;
+        setTimeout(initController, RETRY_INTERVAL);
+    });
+}
 
 /* ============================================================
-   BUTTON HANDLING
-   BUTTON MAP (VERIFIED VIA jstest):
-   0 = A
-   6 = LB
-   7 = RB
+   STARTUP
    ============================================================ */
 
-joystick.on('button', event => {
-    if (!event.value) return;
-
-    switch (event.number) {
-        case 0: // SNAPSHOT
-            console.log('Controller: Snapshot');
-            socketHelper.io.emit('snapshot');
-            break;
-
-        /* ================= RECORD TOGGLE ================= */
-        case 1: // B = RECORD TOGGLE
-            isRecording = !isRecording;
-
-            if (isRecording) {
-                console.log('Controller: Record START');
-                socketHelper.io.emit('record:start');
-            } else {
-                console.log('Controller: Record STOP');
-                socketHelper.io.emit('record:stop');
-            }
-            break;
-        /* ================= SPEED CONTROL ================= */
-        case 6: // LB = speed down
-            updateSpeed(Math.max(5, speed - 5));
-            break;
-
-        case 7: // RB = speed up
-            updateSpeed(Math.min(100, speed + 5));
-            break;
-    }
-});
-
-/* ============================================================
-   SAFETY
-   ============================================================ */
-
-joystick.on('error', err => {
-    console.error('Joystick error:', err);
-    motor.stopAll();
-});
+initController();

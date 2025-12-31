@@ -2,7 +2,9 @@
 
 251226 Recording and ability to take snapshots
 
-251217 AI support and faster restarts
+251227 AI support and faster restarts
+
+251230 Xbox controller support and bug fixes
 
 
 ### Components needed
@@ -12,6 +14,8 @@ L298N motor controller
 Raspberry pi3b with wifi or with wifi dongle
 
 Raspberry pi camera module
+
+Bluethooth dongle 
 
 Flying Fish IR obstacle avoidance sensors.
 
@@ -95,6 +99,7 @@ node -v && npm -v
 cd /opt/jarvis
 sudo npm install
 sudo npm install pigpio-client
+sudo npm install socket.io-client
 ``` 
 ### Make camera start streaming at boot
 ``` 
@@ -156,6 +161,41 @@ sudo systemctl enable leo-server
 sudo systemctl start leo-server
 sudo systemctl status leo-server
 ```
+### Make Controller functions start at boot
+``` 
+sudo tee /etc/systemd/system/leo-controller.service > /dev/null << 'EOF'
+[Unit]
+Description=Leo Xbox Controller (Bluetooth)
+After=bluetooth.target
+Wants=bluetooth.target
+
+[Service]
+Type=simple
+
+# Directory where controller.js lives
+WorkingDirectory=/opt/jarvis
+
+# Start the controller listener
+ExecStart=/usr/bin/node controller.js
+
+# Restart automatically if Bluetooth reconnects
+Restart=always
+RestartSec=2
+
+# Ensure access to input devices
+User=root
+
+[Install]
+WantedBy=multi-user.target
+EOF
+```
+```
+sudo systemctl daemon-reload
+sudo systemctl enable leo-controller
+sudo systemctl start leo-controller
+sudo systemctl status leo-controller
+```
+
 Troubleshooting
 
 ```
