@@ -1,13 +1,22 @@
 /*
   FILE: camera_stream.js
+
   PURPOSE:
-  Optimized MJPEG camera streaming for Leo.
-  Keeps browser compatibility while significantly reducing CPU usage.
+  - Provide MJPEG camera streaming for Leo
+  - Broadcast frames to all connected HTTP clients
+  - Expose FPS endpoint for GUI overlay
+
+  OPTIMIZATION 1.1 (APPLIED):
+  - When NO clients are connected:
+      * Do NOT parse MJPEG frames
+      * Do NOT calculate FPS
+      * Do NOT broadcast data
+  - Camera process continues running (safe)
+  - Reduces CPU and memory usage when idle
 */
 
 const http = require('http');
 const { spawn } = require('child_process');
-const fs = require('fs');
 
 /* ============================================================
    CONFIGURATION
@@ -16,7 +25,7 @@ const fs = require('fs');
 const PORT = 8888;
 const BOUNDARY = '--frame';
 
-// Tuned for low CPU on Raspberry Pi 3B
+/* Camera tuning for Raspberry Pi */
 const WIDTH = 480;
 const HEIGHT = 270;
 const FRAMERATE = 20;
@@ -26,15 +35,20 @@ const QUALITY = 60;
    RUNTIME STATE
    ============================================================ */
 
+/* Connected MJPEG clients (HTTP responses) */
 let clients = [];
-let lastFrame = null;
+
+/* HTTP server instance */
 let server = null;
+
+/* rpicam-vid process */
 let camProcess = null;
 
 /* ============================================================
    FPS STATE
    ============================================================ */
 
+/* Frame counter for FPS calculation */
 let frameCounter = 0;
 let currentFps = 0;
 let lastFpsTime = Date.now();
@@ -45,17 +59,25 @@ let lastFpsTime = Date.now();
 
 server = http.createServer((req, res) => {
 
-    /* === FPS ENDPOINT (USED BY GUI) === */
+    /* ============================================================
+       FPS ENDPOINT
+       PURPOSE:
+       - Used by GUI to display real camera FPS
+       ============================================================ */
     if (req.url === '/fps') {
         res.writeHead(200, {
             'Content-Type': 'application/json',
-            'Access-Control-Allow-Origin': '*',
             'Cache-Control': 'no-cache'
         });
         return res.end(JSON.stringify({ fps: currentFps }));
     }
 
-    /* === MJPEG STREAM === */
+    /* ============================================================
+       MJPEG STREAM ENDPOINT
+       PURPOSE:
+       - Add client to broadcast list
+       - Send multipart MJPEG stream
+       ============================================================ */
     res.writeHead(200, {
         'Cache-Control': 'no-cache',
         'Connection': 'close',
@@ -64,6 +86,7 @@ server = http.createServer((req, res) => {
 
     clients.push(res);
 
+    /* Remove client on disconnect */
     req.on('close', () => {
         clients = clients.filter(c => c !== res);
     });
@@ -74,7 +97,7 @@ server.listen(PORT, '0.0.0.0', () => {
 });
 
 /* ============================================================
-   CAMERA PROCESS (MJPEG, CPU-OPTIMIZED)
+   CAMERA PROCESS (MJPEG OUTPUT)
    ============================================================ */
 
 camProcess = spawn('/usr/bin/rpicam-vid', [
@@ -91,38 +114,62 @@ camProcess = spawn('/usr/bin/rpicam-vid', [
 ]);
 
 /* ============================================================
-   FRAME PARSING + FPS
+   MJPEG FRAME PARSING
    ============================================================ */
 
+/*
+  Buffer holding partial MJPEG data.
+  Frames are identified by JPEG SOI/EOI markers.
+*/
 let buffer = Buffer.alloc(0);
 
 camProcess.stdout.on('data', chunk => {
+
+    /* ============================================================
+       OPTIMIZATION 1.1:
+       If no clients are connected, skip ALL processing.
+       ============================================================ */
+    if (clients.length === 0) {
+        buffer = Buffer.alloc(0);   // Drop buffered data immediately
+        frameCounter = 0;           // Reset FPS counters
+        lastFpsTime = Date.now();
+        return;
+    }
+
+    /* Append new camera data */
     buffer = Buffer.concat([buffer, chunk]);
 
+    /* Attempt to extract complete JPEG frames */
     while (true) {
         const start = buffer.indexOf(Buffer.from([0xff, 0xd8]));
-        const end = buffer.indexOf(Buffer.from([0xff, 0xd9]), start + 2);
+        const end   = buffer.indexOf(Buffer.from([0xff, 0xd9]), start + 2);
+
         if (start === -1 || end === -1) break;
 
         const frame = buffer.slice(start, end + 2);
         buffer = buffer.slice(end + 2);
 
-        lastFrame = frame;
-
+        /* ============================================================
+           FPS CALCULATION
+           ============================================================ */
         frameCounter++;
         const now = Date.now();
         const elapsed = now - lastFpsTime;
 
-        // FPS update every 2 seconds (lower CPU)
         if (elapsed >= 2000) {
             currentFps = Math.round((frameCounter * 1000) / elapsed);
             frameCounter = 0;
             lastFpsTime = now;
         }
 
+        /* ============================================================
+           BROADCAST FRAME TO ALL CLIENTS
+           ============================================================ */
         for (const c of clients) {
             c.write(
-                `${BOUNDARY}\r\nContent-Type: image/jpeg\r\nContent-Length: ${frame.length}\r\n\r\n`
+                `${BOUNDARY}\r\n` +
+                `Content-Type: image/jpeg\r\n` +
+                `Content-Length: ${frame.length}\r\n\r\n`
             );
             c.write(frame);
             c.write('\r\n');
@@ -131,12 +178,14 @@ camProcess.stdout.on('data', chunk => {
 });
 
 /* ============================================================
-   SHUTDOWN HANDLING
+   CLEAN SHUTDOWN
    ============================================================ */
 
 function shutdown() {
     if (camProcess) camProcess.kill('SIGTERM');
-    for (const c of clients) try { c.end(); } catch {}
+    for (const c of clients) {
+        try { c.end(); } catch {}
+    }
     if (server) server.close(() => process.exit(0));
     setTimeout(() => process.exit(1), 3000);
 }

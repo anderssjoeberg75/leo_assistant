@@ -293,7 +293,7 @@
 
   speed.addEventListener('input', () => {
     speedValue.textContent = `${speed.value}%`;
-socket.emit('speed', Number(speed.value));
+    socket.emit('speed', Number(speed.value));
   });
 
   /* ============================================================
