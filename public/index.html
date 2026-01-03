@@ -131,6 +131,11 @@
       cursor: pointer;
     }
 
+    .dbtn.pressed {
+      background: red;
+      color: white;
+    }
+
     .empty { visibility: hidden; }
 
     #status-panel {
@@ -162,15 +167,7 @@
   <!-- CONTROLS -->
   <div id="controls">
     <button id="snapshot" class="ctrlbtn">📸</button>
-
-    <button id="record" class="ctrlbtn">
-      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 24" width="48" height="24">
-        <rect x="1" y="1" width="62" height="22" rx="4" ry="4" fill="red"/>
-        <text x="32" y="17" text-anchor="middle" fill="white"
-              font-size="14" font-family="Arial" font-weight="bold">REC</text>
-      </svg>
-    </button>
-
+    <button id="record" class="ctrlbtn">REC</button>
     <button id="toggle-stream" class="ctrlbtn active">📡 Stream ON</button>
     <button id="toggle-controller" class="ctrlbtn active">🎮 ON</button>
   </div>
@@ -229,6 +226,9 @@
 
   $('toggle-stream').onclick = () => {
     streamEnabled = !streamEnabled;
+
+    socket.emit('stream:toggle', streamEnabled);
+
     if (streamEnabled) {
       startStream();
       $('toggle-stream').textContent = '📡 Stream ON';
@@ -250,6 +250,35 @@
             controllerEnabled ? 'ctrlbtn active' : 'ctrlbtn inactive';
   };
 
+  /* ================= MOVEMENT BUTTONS ================= */
+
+  function bindMoveButton(id, command) {
+    const btn = $(id);
+
+    const press = () => {
+      btn.classList.add('pressed');
+      socket.emit('move', command);
+    };
+
+    const release = () => {
+      btn.classList.remove('pressed');
+      socket.emit('stopAll');
+    };
+
+    btn.addEventListener('mousedown', press);
+    btn.addEventListener('mouseup', release);
+    btn.addEventListener('mouseleave', release);
+    btn.addEventListener('touchstart', e => { e.preventDefault(); press(); });
+    btn.addEventListener('touchend', release);
+  }
+
+  bindMoveButton('forward', 'forward');
+  bindMoveButton('backward', 'backward');
+  bindMoveButton('left', 'left');
+  bindMoveButton('right', 'right');
+
+  $('stop').onclick = () => socket.emit('stopAll');
+
   /* ================= SNAPSHOT / RECORD ================= */
 
   $('snapshot').onclick = () => socket.emit('snapshot');
@@ -268,7 +297,7 @@
   socket.on('record:start', () => $('rec-indicator').style.display = 'block');
   socket.on('record:stop', () => $('rec-indicator').style.display = 'none');
 
-  /* ================= FPS FETCH (RESTORED) ================= */
+  /* ================= FPS FETCH ================= */
 
   setInterval(async () => {
     if (!streamEnabled) return;
@@ -281,7 +310,7 @@
     }
   }, 1000);
 
-  /* ================= STATS UPDATE ================= */
+  /* ================= STATS ================= */
 
   function formatDuration(seconds) {
     const d = Math.floor(seconds / 86400);

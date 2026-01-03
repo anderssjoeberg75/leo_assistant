@@ -9,6 +9,7 @@
   - MJPEG recording
   - Xbox controller enable/disable
   - System stats (CPU / RAM / Temp / Uptime / Age)
+  - Start / Stop camera systemd service
 */
 
 const path = require('path');
@@ -17,6 +18,7 @@ const fs = require('fs');
 const http = require('http');
 const express = require('express');
 const { Server } = require('socket.io');
+const { exec } = require('child_process');
 
 /* ============================================================
    CONSTANTS
@@ -142,8 +144,6 @@ function startRecording() {
       { host: CAMERA_HOST, port: CAMERA_PORT, path: '/' },
       res => res.on('data', chunk => recordStream.write(chunk))
   );
-
-  console.log('Recording started:', filePath);
 }
 
 function stopRecording() {
@@ -158,8 +158,6 @@ function stopRecording() {
     recordStream.end();
     recordStream = null;
   }
-
-  console.log('Recording stopped');
 }
 
 /* ============================================================
@@ -167,11 +165,9 @@ function stopRecording() {
    ============================================================ */
 
 io.on('connection', socket => {
-  console.log('Client connected:', socket.id);
 
   socket.on('controller:toggle', enabled => {
     controllerEnabled = !!enabled;
-    console.log('Controller enabled:', controllerEnabled);
   });
 
   socket.on('move', dir => {
@@ -188,9 +184,7 @@ io.on('connection', socket => {
     try {
       await captureSnapshot();
       io.emit('snapshot');
-    } catch (e) {
-      console.error('Snapshot failed:', e.message);
-    }
+    } catch {}
   });
 
   socket.on('record', () => {
@@ -203,14 +197,29 @@ io.on('connection', socket => {
     }
   });
 
+  /* ============================================================
+     CAMERA SERVICE CONTROL (FIXED)
+     ============================================================ */
+
+  socket.on('stream:toggle', enabled => {
+    const cmd = enabled
+        ? 'systemctl start leo-camera.service'
+        : 'systemctl stop leo-camera.service && systemctl kill leo-camera.service';
+
+    exec(cmd, err => {
+      if (err) {
+        console.error('Camera service error:', err.message);
+      }
+    });
+  });
+
   socket.on('disconnect', () => {
     motor.stopAll();
-    console.log('Client disconnected:', socket.id);
   });
 });
 
 /* ============================================================
-   STATS LOOP (THIS FIXES YOUR ISSUE)
+   STATS LOOP
    ============================================================ */
 
 setInterval(() => {
@@ -230,3 +239,4 @@ setInterval(() => {
 server.listen(3000, () => {
   console.log('Leo server listening on port 3000');
 });
+
